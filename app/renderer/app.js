@@ -144,6 +144,80 @@ function renderInbox() {
   $("run-inbox").disabled = inbox.length === 0;
 }
 
+// The pipeline and Ollama narrate themselves in log lines meant for the log
+// file. Translate them into one plain sentence and a progress fraction.
+function activity(id) {
+  const box = $(`${id}-activity`);
+  const bar = $(`${id}-bar`);
+  return {
+    start(main) {
+      box.hidden = false;
+      box.classList.remove("is-done");
+      $(`${id}-main`).textContent = main;
+      $(`${id}-sub`).textContent = "";
+      bar.hidden = true;
+      bar.firstElementChild.style.width = "0%";
+    },
+    update({ main, sub, fraction }) {
+      if (main !== undefined) $(`${id}-main`).textContent = main;
+      if (sub !== undefined) $(`${id}-sub`).textContent = sub;
+      if (fraction !== undefined) {
+        bar.hidden = false;
+        bar.firstElementChild.style.width = `${Math.round(fraction * 100)}%`;
+      }
+    },
+    finish(main, sub = "") {
+      box.hidden = false;
+      box.classList.add("is-done");
+      $(`${id}-main`).textContent = main;
+      $(`${id}-sub`).textContent = sub;
+      bar.hidden = true;
+    },
+  };
+}
+
+// One pipeline log line -> what to show, or null to ignore it.
+function describeRunLine(line, progress) {
+  const text = line.trim();
+  let match;
+  if ((match = text.match(/^Found (\d+) paper/))) {
+    progress.papers = Number(match[1]);
+    progress.done = 0;
+    return { main: `Processing ${plural(progress.papers, "paper")}…`, sub: "" };
+  }
+  if ((match = text.match(/^Processing (.+)\.pdf/))) {
+    progress.paper = match[1];
+    progress.dropped = 0;
+    return { main: `Reading ${match[1]}`, sub: "extracting the text", fraction: 0 };
+  }
+  if ((match = text.match(/^title: (.+)$/))) {
+    progress.paper = match[1];
+    return { main: `Reading ${match[1]}` };
+  }
+  if ((match = text.match(/^section (\d+)\/(\d+)/))) {
+    const [, current, total] = match.map(Number);
+    // Generation is most of the work; leave room for the checking that follows.
+    return { sub: `writing questions — section ${current} of ${total}`, fraction: (current / total) * 0.6 };
+  }
+  if (text.startsWith("ranking")) return { sub: "choosing the best questions", fraction: 0.65 };
+  if (text.startsWith("verifying")) return { sub: "checking each answer against the paper", fraction: 0.75 };
+  if (text.startsWith("dropped:")) {
+    progress.dropped = (progress.dropped || 0) + 1;
+    return { sub: `checking answers — ${plural(progress.dropped, "question")} dropped so far` };
+  }
+  if ((match = text.match(/^(\d+) of (\d+) questions checked passed/))) {
+    return { sub: `kept ${match[1]} questions`, fraction: 0.95 };
+  }
+  if (text.startsWith("Done.")) {
+    progress.done += 1;
+    return { main: `Finished ${progress.paper || "the paper"}`, sub: "", fraction: 1 };
+  }
+  if (/^(Can't start:|WARNING:|ERROR)/.test(text)) {
+    return { sub: text.replace(/^(Can't start:|WARNING:|ERROR)\s*/, "") };
+  }
+  return null; // timings, tracebacks and the like stay in the log file
+}
+
 async function runInbox() {
   // Check the model is there before starting: a run that can't work takes
   // minutes to say so otherwise.
@@ -163,22 +237,22 @@ async function runInbox() {
     return toast(err.message, 8000);
   }
 
-  const log = $("run-log");
-  log.hidden = false;
-  log.textContent = "";
+  state.runProgress = { papers: 0, done: 0 };
+  state.runActivity = activity("run");
+  state.runActivity.start("Starting…");
   $("run-inbox").disabled = true;
-  $("run-note").textContent = "Running…";
+  $("run-note").textContent = "";
   try {
     const result = await window.study.processInbox();
     if (result && result.ok === false) throw new Error(result.error || "the run stopped early");
-    $("run-note").textContent = "Finished.";
-    toast("Inbox processed");
+    const { done } = state.runProgress;
+    state.runActivity.finish(done ? `Done — ${plural(done, "paper")} ready to study` : "Nothing to process");
   } catch (err) {
-    $("run-note").textContent = err.message;
-    toast(err.message, 8000);
+    state.runActivity.finish("Couldn't finish the run", err.message);
   }
+  state.runActivity = null;
+  $("run-inbox").disabled = false;
   await refresh();
-renderSettings();
 }
 
 async function addPapers(paths) {
@@ -253,10 +327,47 @@ function renderProgress() {
 
 // ---- settings -----------------------------------------------------------
 
-function qualityTag(quality) {
-  const label = { best: "best quality", weaker: "weaker", weakest: "weakest" }[quality] || quality;
-  return `<span class="tag tag--${quality === "best" ? "done" : "review"}">${label}</span>`;
+const QUALITY_LABEL = {
+  best: "best questions",
+  weaker: "weaker questions, checks less reliably",
+  weakest: "shallowest questions, least reliable checks",
+};
+
+// Installed models plus the suggestions worth downloading, as one list.
+function modelRows(models) {
+  const installed = new Map(models.installed.map((m) => [m.name, m]));
+  const rows = models.suggested.map((m) => ({ ...m, installed: installed.has(m.name) }));
+  for (const m of models.installed) {
+    if (!rows.some((row) => row.name === m.name)) {
+      rows.push({ name: m.name, size: `${(m.size_bytes / 1e9).toFixed(1)} GB`, installed: true, quality: "", note: "" });
+    }
+  }
+  return rows;
 }
+
+function renderModelPicker(models) {
+  state.modelRows = modelRows(models);
+  const option = (m) =>
+    `<option value="${escapeHtml(m.name)}"${m.name === models.selected ? " selected" : ""}>` +
+    `${escapeHtml(m.name)} — ${m.size}${m.quality ? ` · ${QUALITY_LABEL[m.quality] || m.quality}` : ""}</option>`;
+  const downloaded = state.modelRows.filter((m) => m.installed);
+  const available = state.modelRows.filter((m) => !m.installed);
+  $("model-select").innerHTML =
+    (downloaded.length ? `<optgroup label="Downloaded">${downloaded.map(option).join("")}</optgroup>` : "") +
+    (available.length ? `<optgroup label="Not downloaded">${available.map(option).join("")}</optgroup>` : "");
+  describeSelectedModel();
+}
+
+// One line under the dropdown, saying what this choice costs you.
+function describeSelectedModel() {
+  const name = $("model-select").value;
+  const model = (state.modelRows || []).find((m) => m.name === name);
+  $("model-download").hidden = !(model && !model.installed);
+  const detail = $("model-detail");
+  detail.textContent = model ? (model.installed ? "" : `Not downloaded (${model.size}). `) + (model.note || "") : "";
+  detail.classList.toggle("is-warning", Boolean(model && model.quality && model.quality !== "best"));
+}
+
 
 async function renderSettings() {
   let env;
@@ -284,34 +395,7 @@ async function renderSettings() {
   const blocking = !ollama.running || !models.selected_installed;
   $("settings-pip").hidden = !blocking;
 
-  // Model picker: everything installed, plus suggestions worth downloading.
-  const installed = new Map(models.installed.map((m) => [m.name, m]));
-  const rows = models.suggested.map((m) => ({ ...m, installed: installed.has(m.name) }));
-  for (const m of models.installed) {
-    if (!rows.some((row) => row.name === m.name)) {
-      rows.push({ name: m.name, size: `${(m.size_bytes / 1e9).toFixed(1)} GB`, installed: true, note: "", quality: "" });
-    }
-  }
-  $("model-note").textContent =
-    "Smaller models are faster but write shallower questions and check them less reliably — the 14b kept an answer that contradicted the paper in 3 of 3 test runs, where the 32b rejected it every time.";
-  $("model-list").innerHTML = rows
-    .map(
-      (m) => `
-      <label class="model ${m.name === models.selected ? "is-selected" : ""}">
-        <input type="radio" name="model" value="${escapeHtml(m.name)}" ${m.name === models.selected ? "checked" : ""} />
-        <span class="model-main">
-          <b>${escapeHtml(m.name)}</b>
-          <span class="tags">
-            <span class="tag">${m.size}</span>
-            ${m.quality ? qualityTag(m.quality) : ""}
-            ${m.installed ? "" : `<span class="tag">not downloaded</span>`}
-          </span>
-          ${m.note ? `<span class="meta">${escapeHtml(m.note)}</span>` : ""}
-        </span>
-        ${m.installed ? "" : `<button class="btn" data-pull="${escapeHtml(m.name)}">Download</button>`}
-      </label>`,
-    )
-    .join("");
+  renderModelPicker(models);
 
   $("num-questions").value = settings.num_questions;
   $("guidance").value = settings.guidance;
@@ -326,7 +410,7 @@ async function renderSettings() {
 }
 
 async function saveSettings() {
-  const model = document.querySelector('input[name="model"]:checked')?.value;
+  const model = $("model-select").value;
   try {
     await window.study.saveSettings({
       model,
@@ -520,7 +604,6 @@ function finishSession() {
       missed.map((item) => `<li>${escapeHtml(item.question.question)}</li>`).join("")
     : "";
   refresh();
-renderSettings();
 }
 
 // ---- wiring -------------------------------------------------------------
@@ -552,11 +635,6 @@ document.addEventListener("click", (event) => {
   if (study) return startPaper(study.dataset.study);
   const peek = event.target.closest("[data-peek]");
   if (peek) return togglePeek(peek.dataset.peek);
-  const pull = event.target.closest("[data-pull]");
-  if (pull) {
-    event.preventDefault();
-    return pullModel(pull.dataset.pull);
-  }
 });
 
 $("reveal").addEventListener("click", revealAnswer);
@@ -574,7 +652,6 @@ $("open-pdf").addEventListener("click", () => {
 $("leave-study").addEventListener("click", () => {
   show("today");
   refresh();
-renderSettings();
 });
 $("finish").addEventListener("click", () => {
   show("today");
@@ -582,12 +659,19 @@ $("finish").addEventListener("click", () => {
 });
 
 $("save-settings").addEventListener("click", saveSettings);
+$("model-select").addEventListener("change", describeSelectedModel);
+$("model-download").addEventListener("click", () => pullModel($("model-select").value));
 $("schedule-add").addEventListener("click", () => setSchedule("add"));
 $("schedule-remove").addEventListener("click", () => setSchedule("remove"));
 window.study.onPullLog((line) => {
-  const log = $("pull-log");
-  log.textContent += line + "\n";
-  log.scrollTop = log.scrollHeight;
+  if (!state.pullActivity) return;
+  // Ollama says e.g. "pulling manifest" or "downloading ... — 42% of 14.4 GB".
+  const percent = line.match(/(\d+)% of ([\d.]+ GB)/);
+  state.pullActivity.update(
+    percent
+      ? { sub: `${percent[1]}% of ${percent[2]}`, fraction: Number(percent[1]) / 100 }
+      : { sub: line.replace(/\s+—.*$/, "") },
+  );
 });
 
 $("add-papers").addEventListener("click", async () => {
@@ -600,9 +684,9 @@ $("add-papers").addEventListener("click", async () => {
 
 $("run-inbox").addEventListener("click", runInbox);
 window.study.onProcessLog((line) => {
-  const log = $("run-log");
-  log.textContent += line + "\n";
-  log.scrollTop = log.scrollHeight;
+  if (!state.runActivity) return;
+  const update = describeRunLine(line, state.runProgress);
+  if (update) state.runActivity.update(update);
 });
 
 // Keyboard: space/enter reveals, y/n marks.

@@ -120,7 +120,14 @@
             <span class="meta" id="run-note">Runs the same job as the 02:00 task. ~13 min per paper.</span>
           </div>
         </div>
-        <pre class="console" id="run-log" hidden></pre>
+        <div class="activity" id="run-activity" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <div class="activity-text">
+              <p class="activity-main" id="run-main"></p>
+              <p class="activity-sub" id="run-sub"></p>
+            </div>
+            <div class="activity-bar" id="run-bar" hidden><i></i></div>
+          </div>
       </section>
 
       <!-- Progress -->
@@ -143,22 +150,36 @@
         </div>
 
         <div class="card" style="margin-top:18px">
-          <p class="eyebrow">Model</p>
-          <p class="meta" id="model-note"></p>
-          <div class="model-list" id="model-list"></div>
-          <pre class="console" id="pull-log" hidden></pre>
-        </div>
+          <p class="eyebrow">How questions get made</p>
 
-        <div class="card" style="margin-top:18px">
-          <p class="eyebrow">Questions</p>
-          <label class="field">
-            <span class="meta">How many per paper</span>
+          <label class="field field--row">
+            <span class="meta">Model</span>
+            <span class="model-picker">
+              <select id="model-select"></select>
+              <button class="btn" id="model-download" hidden>Download</button>
+            </span>
+          </label>
+          <p class="meta model-detail" id="model-detail"></p>
+
+          <div class="activity" id="pull-activity" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <div class="activity-text">
+              <p class="activity-main" id="pull-main"></p>
+              <p class="activity-sub" id="pull-sub"></p>
+            </div>
+            <div class="activity-bar" id="pull-bar" hidden><i></i></div>
+          </div>
+
+          <label class="field field--row" style="margin-top:18px">
+            <span class="meta">Questions per paper</span>
             <input type="number" id="num-questions" min="1" max="50" />
           </label>
-          <label class="field" style="margin-top:16px">
+
+          <label class="field" style="margin-top:18px">
             <span class="meta">Tailor the questions (optional) — added to the prompt for every paper</span>
-            <textarea id="guidance" rows="4" placeholder="e.g. I'm a wet-lab biologist: favour experimental design and controls over the maths."></textarea>
+            <textarea id="guidance" rows="3" placeholder="e.g. I'm a wet-lab biologist: favour experimental design and controls over the maths."></textarea>
           </label>
+
           <div class="row">
             <button class="btn btn--primary" id="save-settings">Save</button>
             <span class="meta" id="settings-note"></span>
