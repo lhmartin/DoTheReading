@@ -24,6 +24,7 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 # this machine) is smaller than a full chunk + instructions + answer, and
 # Ollama silently drops the start of prompts that don't fit.
 NUM_CTX = 8192
+MAX_JSON_ATTEMPTS = 2  # per model call, before giving up on a malformed reply
 CHUNK_SIZE = 12000    # chars; ~3,000 tokens per chunk
 CHUNK_OVERLAP = 1500  # chars from the end of each chunk repeated at the start of the next
 OCR_MIN_CHARS = 25    # pages with fewer non-whitespace chars than this get OCR'd
@@ -240,46 +241,59 @@ def call_ollama(prompt: str, model: str, fmt=None) -> str:
     return resp.json()["response"].strip()
 
 
-def ask_json(prompt: str, model: str, schema: dict, log=print) -> dict:
-    """Call the model constrained to `schema`; retry once on malformed JSON."""
-    for attempt in (1, 2):
+def _ask_with_retry(prompt: str, model: str, schema: dict, parse, log=print) -> tuple:
+    """Call the model constrained to `schema` and parse the reply, retrying
+    once if it doesn't parse. Returns (parsed value, last raw reply); the
+    value is None if every attempt failed."""
+    raw = ""
+    for attempt in range(1, MAX_JSON_ATTEMPTS + 1):
         raw = call_ollama(prompt, model, fmt=schema)
         try:
-            data = json.loads(strip_json_fence(raw))
-            if isinstance(data, dict):
-                return data
-        except json.JSONDecodeError:
-            pass
-        log(f"      couldn't parse model output (attempt {attempt}/2)")
-    raise ValueError("model did not return valid JSON after 2 attempts")
+            return parse(raw), raw
+        except ValueError as e:
+            log(f"      couldn't parse model output (attempt {attempt}/{MAX_JSON_ATTEMPTS}): {e}")
+    return None, raw
+
+
+def _parse_json_object(raw: str) -> dict:
+    try:
+        data = json.loads(strip_json_fence(raw))
+    except json.JSONDecodeError as e:
+        raise ValueError(str(e)) from e
+    if not isinstance(data, dict):
+        raise ValueError("expected a JSON object")
+    return data
+
+
+def ask_json(prompt: str, model: str, schema: dict, log=print) -> dict:
+    data, _ = _ask_with_retry(prompt, model, schema, _parse_json_object, log)
+    if data is None:
+        raise ValueError(f"model did not return valid JSON after {MAX_JSON_ATTEMPTS} attempts")
+    return data
 
 
 def ask_for_questions(prompt: str, model: str, log=print) -> list[dict]:
-    """Call the model for structured questions. Retries once on malformed
-    JSON, then falls back to reading the reply as old-style Q:/A: text."""
-    raw = ""
-    for attempt in (1, 2):
-        raw = call_ollama(prompt, model, fmt=QUESTIONS_SCHEMA)
-        try:
-            return parse_model_json(raw)
-        except ValueError as e:
-            log(f"      couldn't parse model output (attempt {attempt}/2): {e}")
+    """Ask for structured questions, falling back to reading the reply as
+    old-style Q:/A: text if it never parses as JSON."""
+    questions, raw = _ask_with_retry(prompt, model, QUESTIONS_SCHEMA, parse_model_json, log)
+    if questions is not None:
+        return questions
 
     questions = parse_legacy_qa(raw)
     if questions:
         log("      recovered questions from plain-text Q:/A: output.")
         return questions
-    raise ValueError("model did not return usable questions after 2 attempts")
+    raise ValueError(f"model did not return usable questions after {MAX_JSON_ATTEMPTS} attempts")
 
 
 # ---- Quote checking -----------------------------------------------------
 
-def quote_in_text(quote: str, text: str) -> bool:
+def quote_in_text(quote: str, text: str, min_chars: int = MIN_QUOTE_CHARS) -> bool:
     """True if `quote` really appears in `text`, ignoring case, spacing and
     punctuation. Allows small slips (e.g. a mangled symbol) as long as at
     least QUOTE_MATCH_RATIO of the quote appears as one unbroken run."""
     q = normalize_for_match(quote)
-    if len(q) < MIN_QUOTE_CHARS:
+    if len(q) < min_chars:
         return False
     t = normalize_for_match(text)
     if q in t:
@@ -291,17 +305,20 @@ def quote_in_text(quote: str, text: str) -> bool:
 _PAGE_MARKER_RE = re.compile(r"^--- Page (\d+) ---$", flags=re.MULTILINE)
 
 
-def find_page(quote: str, text: str) -> int | None:
-    """Page number (from extract_text's markers) where `quote` starts."""
+def page_index(text: str) -> list[tuple[int, str]]:
+    """(page number, normalized page text) for each page of an extracted
+    document, so many quotes can be located without re-normalizing it."""
+    markers = list(_PAGE_MARKER_RE.finditer(text))
+    return [(int(m.group(1)), normalize_for_match(text[m.end():(n.start() if n else len(text))]))
+            for m, n in zip(markers, markers[1:] + [None])]
+
+
+def find_page(quote: str, pages: list[tuple[int, str]]) -> int | None:
+    """Page number where `quote` starts, using a page_index()."""
     head = normalize_for_match(quote)[:40]
     if not head:
         return None
-    markers = list(_PAGE_MARKER_RE.finditer(text))
-    for marker, nxt in zip(markers, markers[1:] + [None]):
-        page_text = text[marker.end():nxt.start() if nxt else len(text)]
-        if head in normalize_for_match(page_text):
-            return int(marker.group(1))
-    return None
+    return next((number for number, page in pages if head in page), None)
 
 
 def clean_quote(quote: str) -> str:
@@ -542,7 +559,7 @@ def generate_questions(text: str, model: str, num_questions: int, log=print) -> 
                 ok = verify_question(q, chunks[q["chunk"]], model, log)
             except ValueError as e:
                 ok, q["verification"] = False, str(e)
-            if ok and any(normalize_for_match(q["evidence"]) == normalize_for_match(v["evidence"]) for v in verified):
+            if ok and normalize_for_match(q["evidence"]) in {normalize_for_match(v["evidence"]) for v in verified}:
                 ok, q["verification"] = False, "duplicate: same evidence as a question already kept"
             if ok:
                 verified.append(q)
@@ -550,8 +567,9 @@ def generate_questions(text: str, model: str, num_questions: int, log=print) -> 
                 log(f"      dropped: {q['question'][:70]}... ({q['verification'][:80]})")
 
     verified.sort(key=ranked.index)  # batches were verified section by section
+    pages = page_index(text)
     for q in verified:
-        q["page"] = find_page(q["evidence"], text)
+        q["page"] = find_page(q["evidence"], pages)
     summary = f"{len(verified)} of {checked} questions checked passed verification ({len(candidates)} generated)."
     log(f"    {summary}")
     return verified, summary
@@ -578,7 +596,5 @@ def find_title(pdf_path: str, text: str, model: str, log=print) -> str | None:
         title = " ".join(str(ask_json(prompt, model, TITLE_SCHEMA, log).get("title", "")).split())
     except ValueError:
         return None
-    # Titles are short, so skip quote_in_text's minimum length; still require
-    # the title to really be on the page.
-    norm = normalize_for_match(title)
-    return title if len(norm) >= 8 and norm in normalize_for_match(first_page) else None
+    # Titles are shorter than the usual evidence quote, so lower the minimum.
+    return title if quote_in_text(title, first_page, min_chars=8) else None

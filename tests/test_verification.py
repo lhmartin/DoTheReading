@@ -3,7 +3,8 @@ import json
 import pytest
 
 import paper_qa_lib
-from paper_qa_lib import find_page, generate_questions, quote_in_text, rank_candidates, verify_question
+from paper_qa_lib import (find_page, generate_questions, page_index, quote_in_text, rank_candidates,
+                          verify_question)
 
 SECTION = (
     "--- Page 3 ---\nWe train on 1,605 complexes released in 2025. The sleep group re-\n"
@@ -25,9 +26,10 @@ def test_quote_in_text(quote, expected):
 
 
 def test_find_page():
-    assert find_page("the wake group was tested in the evening", SECTION) == 4
-    assert find_page("The sleep group recalled 23 percent", SECTION) == 3
-    assert find_page("not in the paper at all", SECTION) is None
+    pages = page_index(SECTION)
+    assert find_page("the wake group was tested in the evening", pages) == 4
+    assert find_page("The sleep group recalled 23 percent", pages) == 3
+    assert find_page("not in the paper at all", pages) is None
 
 
 class FakeModel:

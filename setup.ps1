@@ -70,12 +70,6 @@ if ($RepoDir -like "\\*") {
            "Windows drive (e.g. $HOME\code\DoTheReading) so Task Scheduler and Windows Python can run it.")
 }
 
-if (-not $Model) {
-    $match = Select-String -Path (Join-Path $RepoDir "process_inbox.py") -Pattern '^MODEL\s*=\s*"([^"]+)"'
-    if (-not $match) { throw "Couldn't read MODEL from process_inbox.py; pass -Model explicitly." }
-    $Model = $match.Matches[0].Groups[1].Value
-}
-
 # ---- Python + dependencies ---------------------------------------------------
 Step "Python"
 $python = Find-Python
@@ -174,6 +168,13 @@ Info "Ollama $($version.version) is running."
 # Structured (JSON schema) output, used for question generation, needs 0.5+.
 if ([version]($version.version -replace '[^0-9.].*$', '') -lt [version]"0.5.0") {
     Warn "Ollama 0.5.0+ is needed for structured output. Update with: winget upgrade Ollama.Ollama"
+}
+
+if (-not $Model) {
+    # Ask the pipeline itself which model it uses, rather than scraping the source.
+    $Model = (& $VenvPython -c "import process_inbox; print(process_inbox.MODEL)").Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $Model) { throw "Couldn't read MODEL from process_inbox.py; pass -Model explicitly." }
+    Info "Model from process_inbox.py: $Model"
 }
 
 if ($SkipModelPull) {

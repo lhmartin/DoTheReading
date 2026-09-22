@@ -1,8 +1,8 @@
 """Remembers how you did on each question, so missed ones can be reviewed.
 
 Stored as JSON (quiz_history.json in ~/PaperStudy). A question is in the
-review pile if you got it wrong the last time you saw it — in a normal quiz
-or a review session. Stdlib only, like quiz_me.py.
+review pile if the last attempt on it was wrong — in a normal quiz or a
+review session. Stdlib only, like quiz_me.py.
 """
 
 import hashlib
@@ -32,14 +32,15 @@ class QuizHistory:
                                           {"paper": paper, "question": question, "attempts": []})
         entry["attempts"].append({"at": (when or datetime.now()).isoformat(timespec="seconds"),
                                   "correct": correct})
-        entry["needs_review"] = not correct
 
     def needs_review(self, paper: str, question: str) -> bool:
-        return self.questions.get(question_key(paper, question), {}).get("needs_review", False)
+        entry = self.questions.get(question_key(paper, question))
+        return bool(entry and entry["attempts"]) and not entry["attempts"][-1]["correct"]
 
     def review_pile(self) -> list[dict]:
-        """Entries to review, the longest-waiting first."""
-        pile = [e for e in self.questions.values() if e.get("needs_review")]
+        """Entries you got wrong the last time you saw them, longest-waiting
+        first."""
+        pile = [e for e in self.questions.values() if e["attempts"] and not e["attempts"][-1]["correct"]]
         return sorted(pile, key=lambda e: e["attempts"][-1]["at"])
 
     def save(self):

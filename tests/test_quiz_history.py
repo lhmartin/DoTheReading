@@ -27,3 +27,11 @@ def test_key_ignores_whitespace_and_punctuation():
 
 def test_missing_file_is_empty(tmp_path):
     assert QuizHistory(tmp_path / "nope.json").review_pile() == []
+
+
+def test_entry_without_attempts_is_ignored(tmp_path):
+    path = tmp_path / "quiz_history.json"
+    path.write_text('{"version": 1, "questions": {"p::abc": {"paper": "p", "question": "Q?", "attempts": []}}}')
+    h = QuizHistory(path)
+    assert h.review_pile() == []
+    assert not h.needs_review("p", "Q?")
