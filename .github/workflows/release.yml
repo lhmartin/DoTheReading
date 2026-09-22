@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write      # for build provenance attestation
+  attestations: write
 
 jobs:
   windows-installer:
@@ -64,6 +66,12 @@ jobs:
 
       - name: Build the installer
         working-directory: app
+        env:
+          # electron-builder signs automatically when these are set. Add the
+          # repo secrets once a code-signing certificate exists; until then
+          # the build is simply unsigned.
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: npx electron-builder --win --publish never
 
       - name: Smoke-test the packaged app
@@ -82,6 +90,22 @@ jobs:
           if (-not $check.ok) { throw "packaged app self-test failed: $($check.error)" }
           if (-not $check.packaged) { throw "self-test didn't run against the packaged build" }
 
+      - name: Checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem release\*.exe | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          } | Set-Content release\SHA256SUMS.txt
+          Get-Content release\SHA256SUMS.txt
+
+      # Signed, verifiable proof of which workflow run built the installer:
+      #   gh attestation verify DoTheReading-Setup-x.y.z.exe -R lhmartin/DoTheReading
+      - name: Attest build provenance
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/*.exe
+
       - uses: actions/upload-artifact@v4
         with:
           name: DoTheReading-installer
@@ -91,7 +115,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.exe
+          files: |
+            release/*.exe
+            release/SHA256SUMS.txt
           body: |
             **DoTheReading** — download `DoTheReading-Setup-*.exe` below.
 
@@ -99,3 +125,19 @@ jobs:
             no Python install is needed. On first run the app's Settings tab
             checks for Ollama and offers to download a model (the model is a
             separate ~14 GB download; a smaller one can be chosen there).
+
+            **Windows will warn you**: the installer isn't code-signed, so
+            SmartScreen shows "Windows protected your PC" — choose
+            More info → Run anyway.
+
+            To check you got what this workflow built:
+
+            ```
+            gh attestation verify DoTheReading-Setup-*.exe -R lhmartin/DoTheReading
+            ```
+
+            or compare against `SHA256SUMS.txt`:
+
+            ```powershell
+            Get-FileHash .\DoTheReading-Setup-*.exe -Algorithm SHA256
+            ```

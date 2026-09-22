@@ -30,6 +30,20 @@ what's missing and offers to fix it:
   removes it).
 - **Tesseract** — optional, only for scanned PDFs.
 
+**Windows will warn you.** The installer isn't code-signed, so SmartScreen
+says "Windows protected your PC": choose *More info → Run anyway*. Every
+release carries a build attestation and checksums if you'd rather verify
+what you downloaded:
+
+```powershell
+gh attestation verify .\DoTheReading-Setup-0.1.2.exe -R lhmartin/DoTheReading
+Get-FileHash .\DoTheReading-Setup-0.1.2.exe -Algorithm SHA256   # compare with SHA256SUMS.txt
+```
+
+Signing it properly needs a certificate; `release.yml` picks up
+`WINDOWS_CSC_LINK` / `WINDOWS_CSC_KEY_PASSWORD` repo secrets and signs
+automatically when they exist.
+
 The sections below are the from-source route, which you also want if you
 like the CLI or plan to change the code.
 
