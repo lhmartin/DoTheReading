@@ -75,9 +75,15 @@ function runSelfTest(win, resultFile) {
   win.webContents.once("did-finish-load", async () => {
     try {
       const environment = await win.webContents.executeJavaScript("window.study.environment()");
+      // The hidden attribute is easy to break with a stray display rule, and
+      // an overlay stuck on top makes the app unusable.
+      const overlayHidden = await win.webContents.executeJavaScript(
+        "getComputedStyle(document.getElementById('dropzone')).display === 'none'",
+      );
       clearTimeout(timer);
       finish({
-        ok: Boolean(environment && environment.settings && environment.settings.model),
+        ok: Boolean(environment && environment.settings && environment.settings.model) && overlayHidden,
+        overlayHidden,
         packaged: app.isPackaged,
         model: environment?.settings?.model,
         ollamaRunning: environment?.ollama?.running,

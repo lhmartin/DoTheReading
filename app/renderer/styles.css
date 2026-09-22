@@ -24,6 +24,10 @@
 
 * { box-sizing: border-box; }
 
+/* Author styles beat the browser's [hidden] rule, so anything given a
+   display (.dropzone, .pip) would ignore the hidden attribute without this. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
