@@ -1,6 +1,6 @@
 // Electron main process. All study data comes from study_api.py in the repo
 // root, so the app never parses question files or history itself.
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -162,6 +162,19 @@ ipcMain.handle("pull-model", (event, model) =>
 ipcMain.handle("schedule", (_event, { action, time }) =>
   callApi(["schedule", "--action", action, ...(time ? ["--time", time] : [])]),
 );
+
+ipcMain.handle("add-papers", (_event, paths) =>
+  paths.length ? callApi(["add-papers", "--files", ...paths]) : { added: [], skipped: [] },
+);
+
+ipcMain.handle("choose-papers", async (event) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: "Add papers to the inbox",
+    properties: ["openFile", "multiSelections"],
+    filters: [{ name: "PDFs", extensions: ["pdf"] }],
+  });
+  return canceled ? { added: [], skipped: [] } : callApi(["add-papers", "--files", ...filePaths]);
+});
 
 ipcMain.handle("open-external", (_event, target) => shell.openPath(target));
 

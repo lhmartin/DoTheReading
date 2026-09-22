@@ -11,6 +11,7 @@ Every command prints one JSON object on stdout.
     python study_api.py library
     python study_api.py record --paper <stem> --question <text> --correct 1
     python study_api.py grade  --paper <stem> --question <text> --answer <yours>
+    python study_api.py add-papers --files a.pdf b.pdf
     python study_api.py process-inbox        # streams log lines, then a summary
 
 `--base` (or PAPERSTUDY_DIR) overrides ~/PaperStudy, for testing.
@@ -21,6 +22,7 @@ import json
 import os
 import platform
 import random
+import shutil
 import subprocess
 import sys
 from datetime import date, datetime
@@ -209,6 +211,38 @@ def cmd_process_inbox(args) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def add_papers(base: Path, paths: list[str]) -> dict:
+    """Copy PDFs into the inbox, skipping ones already known.
+
+    Returns what happened to each file, so the app can say so.
+    """
+    inbox = base / "inbox"
+    inbox.mkdir(parents=True, exist_ok=True)
+    added, skipped = [], []
+    for raw in paths:
+        source = Path(raw)
+        if source.suffix.lower() != ".pdf" or not source.is_file():
+            skipped.append({"name": source.name, "why": "not a PDF"})
+            continue
+        if (inbox / source.name).exists():
+            skipped.append({"name": source.name, "why": "already in the inbox"})
+            continue
+        if (base / "library" / source.name).exists():
+            skipped.append({"name": source.name, "why": "already processed"})
+            continue
+        try:
+            shutil.copy2(source, inbox / source.name)
+        except OSError as e:
+            skipped.append({"name": source.name, "why": str(e)})
+            continue
+        added.append(source.name)
+    return {"added": added, "skipped": skipped}
+
+
+def cmd_add_papers(args) -> dict:
+    return add_papers(base_dir(args), args.files)
+
+
 def ollama_get(path: str, timeout: float = 3.0):
     import requests
 
@@ -355,6 +389,9 @@ def main():
     save_settings.add_argument("--num-questions", dest="num_questions")
     save_settings.add_argument("--guidance")
 
+    add = sub.add_parser("add-papers")
+    add.add_argument("--files", nargs="+", required=True)
+
     pull = sub.add_parser("pull-model")
     pull.add_argument("--model", required=True)
 
@@ -366,7 +403,8 @@ def main():
     commands = {"library": cmd_library, "record": cmd_record, "grade": cmd_grade,
                 "process-inbox": cmd_process_inbox, "settings": cmd_settings,
                 "save-settings": cmd_save_settings, "environment": cmd_environment,
-                "pull-model": cmd_pull_model, "schedule": cmd_schedule}
+                "pull-model": cmd_pull_model, "schedule": cmd_schedule,
+                "add-papers": cmd_add_papers}
     try:
         result = commands[args.command](args)
     except Exception as e:

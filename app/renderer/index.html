@@ -115,6 +115,7 @@
         <div class="card">
           <ul class="files" id="inbox-list"></ul>
           <div class="row">
+            <button class="btn" id="add-papers">Add PDFs…</button>
             <button class="btn btn--primary" id="run-inbox">Process now</button>
             <span class="meta" id="run-note">Runs the same job as the 02:00 task. ~13 min per paper.</span>
           </div>
@@ -174,6 +175,13 @@
         </div>
       </section>
     </main>
+
+    <div class="dropzone" id="dropzone" hidden>
+      <div class="dropzone-inner">
+        <p class="eyebrow">Drop to add</p>
+        <p class="dropzone-title">Release to put these PDFs in your inbox</p>
+      </div>
+    </div>
 
     <div class="toast" id="toast" hidden></div>
     <script src="app.js"></script>

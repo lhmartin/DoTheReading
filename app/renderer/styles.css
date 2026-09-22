@@ -446,3 +446,31 @@ blockquote p {
   color: var(--ink);
   resize: vertical;
 }
+
+/* ---- drag to add ------------------------------------------------------- */
+
+.dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(244, 239, 228, 0.86);
+  backdrop-filter: blur(2px);
+  animation: rise 160ms ease both;
+}
+.dropzone-inner {
+  padding: 46px 64px;
+  border: 2px dashed var(--oxblood);
+  border-radius: 4px;
+  background: var(--card);
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.dropzone-title {
+  font-family: var(--serif);
+  font-size: 26px;
+  letter-spacing: -0.015em;
+  margin: 10px 0 0;
+}

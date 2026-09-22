@@ -137,7 +137,7 @@ function renderInbox() {
   const { inbox } = state.data;
   $("inbox-list").innerHTML = inbox.length
     ? inbox.map((name) => `<li>${escapeHtml(name)}</li>`).join("")
-    : `<li class="empty">Nothing waiting. Drop PDFs in the inbox folder.</li>`;
+    : `<li class="empty">Nothing waiting — drag PDFs onto the window, or use Add PDFs…</li>`;
   const pip = $("inbox-pip");
   pip.hidden = inbox.length === 0;
   pip.textContent = inbox.length;
@@ -161,6 +161,48 @@ async function runInbox() {
   await refresh();
 renderSettings();
 }
+
+async function addPapers(paths) {
+  if (!paths.length) return;
+  try {
+    const result = await window.study.addPapers(paths);
+    reportAdded(result);
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+}
+
+function reportAdded(result) {
+  const { added = [], skipped = [] } = result || {};
+  if (added.length) {
+    toast(`Added ${plural(added.length, "paper")} to the inbox`);
+    show("inbox");
+  } else if (skipped.length) {
+    toast(`Nothing added — ${skipped[0].name}: ${skipped[0].why}`, 5000);
+  }
+  refresh();
+}
+
+// Drag a PDF anywhere onto the window to queue it.
+let dragDepth = 0;
+window.addEventListener("dragenter", (event) => {
+  event.preventDefault();
+  dragDepth += 1;
+  $("dropzone").hidden = false;
+});
+window.addEventListener("dragover", (event) => event.preventDefault());
+window.addEventListener("dragleave", (event) => {
+  event.preventDefault();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) $("dropzone").hidden = true;
+});
+window.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dragDepth = 0;
+  $("dropzone").hidden = true;
+  const paths = [...event.dataTransfer.files].map((file) => window.study.pathForFile(file)).filter(Boolean);
+  addPapers(paths);
+});
 
 // ---- progress -----------------------------------------------------------
 
@@ -527,6 +569,14 @@ window.study.onPullLog((line) => {
   const log = $("pull-log");
   log.textContent += line + "\n";
   log.scrollTop = log.scrollHeight;
+});
+
+$("add-papers").addEventListener("click", async () => {
+  try {
+    reportAdded(await window.study.choosePapers());
+  } catch (err) {
+    toast(err.message, 8000);
+  }
 });
 
 $("run-inbox").addEventListener("click", runInbox);

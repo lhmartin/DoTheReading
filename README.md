@@ -97,7 +97,10 @@ on the right.
 - **Library** lists every processed paper with its score and review count,
   and can show all questions without quizzing.
 - **Inbox** lists PDFs waiting, and "Process now" runs the nightly job
-  immediately with its log streamed into the window.
+  immediately with its log streamed into the window. Drag PDFs anywhere
+  onto the window to queue them (or use "Add PDFs…"); they're copied, so
+  the original stays where it was, and anything already queued or already
+  processed is skipped.
 - **Progress** shows papers studied, questions answered, accuracy and the
   review pile over recent days.
 - **Settings** holds the setup checklist, the model picker, how many
@@ -121,7 +124,8 @@ be used interchangeably — the app and `quiz_me.py` read and write the same
 
 ## Example: a day in the life
 
-**During the day** — drop PDFs into `~/PaperStudy/inbox`. Nothing else to do.
+**During the day** — drag PDFs onto the app window, or drop them into
+`~/PaperStudy/inbox`. Nothing else to do.
 
 **02:00, the scheduled task runs.** From `process_log.txt` (real run,
 22-page paper, RTX 5000 Ada):
