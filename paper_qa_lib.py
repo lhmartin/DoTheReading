@@ -238,7 +238,40 @@ def call_ollama(prompt: str, model: str, fmt=None) -> str:
         resp.raise_for_status()
     except requests.exceptions.ConnectionError:
         sys.exit("Could not reach Ollama at localhost:11434. Is it running?")
+    except requests.exceptions.HTTPError:
+        # A 404 here means Ollama is running but doesn't have this model —
+        # worth saying plainly rather than showing a raw HTTP error.
+        try:
+            detail = resp.json().get("error", "")
+        except ValueError:
+            detail = resp.text.strip()[:200]
+        if resp.status_code == 404:
+            sys.exit(f"Ollama doesn't have the model '{model}'. Download it in the app's Settings, "
+                     f"or run: ollama pull {model}")
+        sys.exit(f"Ollama returned HTTP {resp.status_code}: {detail}")
     return resp.json()["response"].strip()
+
+
+def installed_models() -> list[str] | None:
+    """Model names Ollama has, or None if it can't be reached."""
+    try:
+        resp = requests.get(OLLAMA_URL.replace("/api/generate", "/api/tags"), timeout=5)
+        resp.raise_for_status()
+        return [m["name"] for m in resp.json().get("models", [])]
+    except (requests.exceptions.RequestException, ValueError, KeyError):
+        return None
+
+
+def check_model(model: str) -> str | None:
+    """A human-readable problem with using `model`, or None if it looks usable."""
+    available = installed_models()
+    if available is None:
+        return "Could not reach Ollama at localhost:11434. Is it running?"
+    if model in available or f"{model}:latest" in available:
+        return None
+    have = ", ".join(sorted(available)) if available else "none"
+    return (f"Ollama doesn't have the model '{model}' (installed: {have}). "
+            f"Download it in the app's Settings, or run: ollama pull {model}")
 
 
 def _ask_with_retry(prompt: str, model: str, schema: dict, parse, log=print) -> tuple:

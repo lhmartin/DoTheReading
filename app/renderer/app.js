@@ -145,13 +145,32 @@ function renderInbox() {
 }
 
 async function runInbox() {
+  // Check the model is there before starting: a run that can't work takes
+  // minutes to say so otherwise.
+  try {
+    const env = await window.study.environment();
+    if (!env.ollama.running) {
+      toast("Ollama isn't running — start it, then try again", 6000);
+      show("settings");
+      return renderSettings();
+    }
+    if (!env.models.selected_installed) {
+      toast(`${env.models.selected} isn't downloaded yet — get it in Settings`, 6000);
+      show("settings");
+      return renderSettings();
+    }
+  } catch (err) {
+    return toast(err.message, 8000);
+  }
+
   const log = $("run-log");
   log.hidden = false;
   log.textContent = "";
   $("run-inbox").disabled = true;
   $("run-note").textContent = "Running…";
   try {
-    await window.study.processInbox();
+    const result = await window.study.processInbox();
+    if (result && result.ok === false) throw new Error(result.error || "the run stopped early");
     $("run-note").textContent = "Finished.";
     toast("Inbox processed");
   } catch (err) {

@@ -205,9 +205,9 @@ def cmd_process_inbox(args) -> dict:
 
     process_inbox.log = streaming_log
     try:
-        process_inbox.main()
-        return {"ok": True}
-    except SystemExit as e:  # e.g. Ollama not running
+        problem = process_inbox.main()
+        return {"ok": not problem, "error": problem or ""}
+    except SystemExit as e:  # e.g. Ollama stopped mid-run
         return {"ok": False, "error": str(e)}
 
 

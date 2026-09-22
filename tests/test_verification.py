@@ -169,3 +169,57 @@ def test_generate_skips_questions_with_duplicate_evidence(fake, monkeypatch):
          blind=[blind()] * 3, judge=[agree] * 3)
     questions, _ = generate_questions(SECTION, "m", num_questions=2, log=lambda m: None)
     assert [q["question"] for q in questions] == ["Question 0?", "Question 2?"]
+
+
+class FakeResponse:
+    def __init__(self, status_code, payload=None, text=""):
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("no json")
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import requests
+
+            raise requests.exceptions.HTTPError(response=self)
+
+
+def test_missing_model_gives_a_plain_message(monkeypatch):
+    monkeypatch.setattr(paper_qa_lib.requests, "post",
+                        lambda *a, **k: FakeResponse(404, {"error": "model 'x' not found"}))
+    with pytest.raises(SystemExit) as exit_info:
+        paper_qa_lib.call_ollama("prompt", "qwen2.5:32b-instruct-q3_K_S")
+    message = str(exit_info.value)
+    assert "doesn't have the model 'qwen2.5:32b-instruct-q3_K_S'" in message
+    assert "ollama pull qwen2.5:32b-instruct-q3_K_S" in message
+    assert "404" not in message, "the HTTP status is noise for the reader"
+
+
+def test_other_http_errors_still_surface(monkeypatch):
+    monkeypatch.setattr(paper_qa_lib.requests, "post",
+                        lambda *a, **k: FakeResponse(500, {"error": "out of memory"}))
+    with pytest.raises(SystemExit) as exit_info:
+        paper_qa_lib.call_ollama("prompt", "m")
+    assert "HTTP 500" in str(exit_info.value) and "out of memory" in str(exit_info.value)
+
+
+@pytest.mark.parametrize("installed, model, expected", [
+    (["qwen2.5:14b"], "qwen2.5:14b", None),
+    (["qwen2.5:14b:latest"], "qwen2.5:14b", None),
+    ([], "qwen2.5:14b", "doesn't have the model"),
+    (["other:7b"], "qwen2.5:14b", "installed: other:7b"),
+])
+def test_check_model(monkeypatch, installed, model, expected):
+    monkeypatch.setattr(paper_qa_lib, "installed_models", lambda: installed)
+    problem = paper_qa_lib.check_model(model)
+    assert problem is None if expected is None else expected in problem
+
+
+def test_check_model_when_ollama_is_down(monkeypatch):
+    monkeypatch.setattr(paper_qa_lib, "installed_models", lambda: None)
+    assert "Could not reach Ollama" in paper_qa_lib.check_model("any")

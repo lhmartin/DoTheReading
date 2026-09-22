@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import settings
-from paper_qa_lib import extract_text, find_title, generate_questions
+from paper_qa_lib import check_model, extract_text, find_title, generate_questions
 from qa_format import render_markdown
 
 # ---- CONFIG -----------------------------------------------------------
@@ -45,7 +45,8 @@ def log(message: str):
         f.write(line + "\n")
 
 
-def main():
+def main() -> str | None:
+    """Returns None when the run completed, or a reason it couldn't start."""
     config = settings.load()
     log_config = f"model {config['model']}, {config['num_questions']} questions"
     for d in (INBOX_DIR, LIBRARY_DIR, QUESTIONS_DIR):
@@ -55,6 +56,12 @@ def main():
     if not pdfs:
         log("No new papers in inbox. Nothing to do.")
         return
+
+    # Fail before touching any paper, rather than after minutes of work.
+    problem = check_model(config["model"])
+    if problem:
+        log(f"Can't start: {problem}")
+        return problem
 
     log(f"Found {len(pdfs)} paper(s) to process. Using {log_config}.")
 
