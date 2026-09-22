@@ -41,6 +41,14 @@ This will, skipping anything already done:
 Options: `-Model qwen2.5:14b`, `-Time 03:30`, `-TaskName ...`,
 `-SkipModelPull`, `-SkipTask`. Re-running is safe.
 
+Check it works end to end before waiting on the scheduler:
+
+```powershell
+copy some-paper.pdf $HOME\PaperStudy\inbox\
+.venv\Scripts\python.exe process_inbox.py   # ~13 min for a 20-page paper
+.venv\Scripts\python.exe quiz_me.py
+```
+
 Daily use:
 
 ```powershell
@@ -48,6 +56,70 @@ Daily use:
 .venv\Scripts\python.exe quiz_me.py --review   # straight to questions you've missed
 .venv\Scripts\python.exe process_inbox.py      # process the inbox right now
 ```
+
+## Example: a day in the life
+
+**During the day** — drop PDFs into `~/PaperStudy/inbox`. Nothing else to do.
+
+**02:00, the scheduled task runs.** From `process_log.txt` (real run,
+22-page paper, RTX 5000 Ada):
+
+```
+[2026-09-22 02:00:02] Found 1 paper(s) to process.
+[2026-09-22 02:00:02] Processing 2026.06.07.729267v1.full.pdf...
+[2026-09-22 02:00:07]     title: Promera: a unified model for biomolecular structure prediction, filtering, and design
+[2026-09-22 02:00:07]     long paper — processing in 8 sections...
+[2026-09-22 02:00:07]       section 1/8...
+...
+[2026-09-22 02:07:31]     ranking 24 candidate questions...
+[2026-09-22 02:08:02]     verifying 12 question(s)...
+[2026-09-22 02:12:40]       dropped: Why is the Promera nanobody design process considered challenging comp... (answer not supported: disagree: Answer A does not specify...)
+[2026-09-22 02:12:49]     12 of 13 questions checked passed verification (24 generated).
+[2026-09-22 02:12:49]   Done. Questions saved, PDF moved to library.
+```
+
+That leaves `questions/2026.06.07.729267v1.full_questions.md`, and the PDF
+moves to `library/`. Roughly 13 minutes per paper.
+
+**In the morning** — `quiz_me.py`:
+
+```
+Papers ready to review:
+
+  1. Promera: a unified model for biomolecular structure prediction, filtering, and design  (12 questions)
+
+  r. Review session: 3 question(s) you missed
+
+Pick a number: 1
+
+12 questions. Think through each one, hit Enter to see the answer and the
+supporting quote, then mark yourself right or wrong.
+
+Q2/12: Why does Promera incorporate masking as an integral part of its training pipeline?
+(Enter when ready to see the answer, q to quit)
+
+Answer: Promera incorporates masking to allow the model to be used for design by
+leveraging the observation that co-folding models generate structured backbones
+for masked residues.
+Paper (p. 2): "Leveraging the observation that co-folding models generate structured
+backbones for masked residues [11], we incorporate masking as an integral part of
+our training pipeline to allow the model to be used for design."
+Did you get it? (y/n): n
+
+...
+
+Score: 9/12
+
+To review:
+  - What limitation is noted in the comparison between Promera and BoltzGen designs?
+  ...
+
+3 question(s) in your review pile. Run `quiz_me.py --review` to go through them.
+```
+
+Press `q` at any prompt to stop; answers so far are saved. Questions you
+miss come back with `quiz_me.py --review`, and drop out of the pile once
+you get them right.
 
 ## Folder layout (created automatically on first run)
 
