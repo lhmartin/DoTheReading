@@ -46,7 +46,7 @@ QUESTIONS_SCHEMA = {
 TITLE_PREFIX = "Study Questions: "
 ANSWER_MARKER = "**Answer:**"
 _EVIDENCE_RE = re.compile(r"^\*\*Evidence(?: \(p\. (\d+)\))?:\*\*\s*(.*)$", flags=re.MULTILINE | re.DOTALL)
-_HEADING_RE = re.compile(r"^## Q\d+\b.*$", flags=re.MULTILINE)
+_HEADING_RE = re.compile(r"^## Q\d+\b[ \t]*(?:\(([^)]*)\))?[ \t]*$", flags=re.MULTILINE)
 _LEGACY_QA_RE = re.compile(r"Q:\s*(.+?)\s*A:\s*(.+?)(?=\nQ:|\Z)", flags=re.DOTALL)
 
 
@@ -135,15 +135,16 @@ def parse_title(md_text: str) -> str | None:
 
 def parse_markdown(md_text: str) -> list[dict]:
     """Pull questions out of a questions .md file, as dicts with keys
-    question, answer, evidence ("" if none) and page (int or None).
+    type, question, answer, evidence ("" if none) and page (int or None).
 
     Understands the current rendered layout (with or without evidence), and
     falls back to the old `Q: ... A: ...` format so question files from
     before the switch still work.
     """
-    sections = _HEADING_RE.split(md_text)[1:]  # [0] is the title block
+    # split() with one capture group alternates: type, section, type, ...
+    parts = _HEADING_RE.split(md_text)[1:]  # [0] is the title block
     questions = []
-    for section in sections:
+    for qtype, section in zip(parts[::2], parts[1::2]):
         question, sep, rest = section.partition(ANSWER_MARKER)
         if not sep or not question.strip():
             continue
@@ -154,11 +155,11 @@ def parse_markdown(md_text: str) -> list[dict]:
             page = int(match.group(1)) if match.group(1) else None
             evidence = match.group(2).strip().strip('"').strip()
         if answer.strip():
-            questions.append({"question": question.strip(), "answer": answer.strip(),
-                              "evidence": evidence, "page": page})
+            questions.append({"type": (qtype or "").strip(), "question": question.strip(),
+                              "answer": answer.strip(), "evidence": evidence, "page": page})
     if questions:
         return questions
     return [
-        {"question": item["question"], "answer": item["answer"], "evidence": "", "page": None}
+        {"type": "", "question": item["question"], "answer": item["answer"], "evidence": "", "page": None}
         for item in parse_legacy_qa(md_text)
     ]

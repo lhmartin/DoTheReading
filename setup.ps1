@@ -185,6 +185,22 @@ if ($SkipModelPull) {
     if ($LASTEXITCODE -ne 0) { throw "ollama pull $Model failed" }
 }
 
+# ---- Desktop app -------------------------------------------------------------
+Step "Desktop app (app/)"
+if (-not (Have node)) {
+    Install-WithWinget "OpenJS.NodeJS.LTS" "Node.js LTS"
+}
+if (Have npm) {
+    Push-Location (Join-Path $RepoDir "app")
+    Info "Installing Electron (first run downloads ~100MB)..."
+    npm install --no-fund --no-audit
+    if ($LASTEXITCODE -ne 0) { Warn "npm install failed; the app won't start until it succeeds." }
+    Pop-Location
+    Info "Start it with DoTheReading.cmd (or: npm start --prefix app)."
+} else {
+    Warn "Node.js not found. Install it and run 'npm install' in app\ to use the desktop app."
+}
+
 # ---- Folders -----------------------------------------------------------------
 Step "Folders"
 foreach ($sub in "inbox", "library", "questions") {
@@ -216,4 +232,4 @@ if ($SkipTask) {
 Step "Done"
 Info "Drop PDFs in:   $PaperStudyDir\inbox"
 Info "Run now:        & `"$VenvPython`" `"$RepoDir\process_inbox.py`""
-Info "Morning quiz:   & `"$VenvPython`" `"$RepoDir\quiz_me.py`""
+Info "Morning quiz:   DoTheReading.cmd  (or & `"$VenvPython`" `"$RepoDir\quiz_me.py`" for the CLI)"

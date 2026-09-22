@@ -1,0 +1,13 @@
+{
+  "name": "dothereading",
+  "version": "1.0.0",
+  "description": "DoTheReading: read the paper, answer the questions",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "productName": "DoTheReading"
+}

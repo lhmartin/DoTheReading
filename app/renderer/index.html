@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>DoTheReading</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <nav class="rail">
+      <div class="mark">Do<span>The</span><br />Reading</div>
+      <button class="rail-btn is-active" data-view="today"><span>Today</span></button>
+      <button class="rail-btn" data-view="library"><span>Library</span></button>
+      <button class="rail-btn" data-view="inbox"><span>Inbox</span><em class="pip" id="inbox-pip" hidden></em></button>
+      <button class="rail-btn" data-view="progress"><span>Progress</span></button>
+      <button class="rail-btn rail-btn--foot" id="refresh"><span>Refresh</span></button>
+    </nav>
+
+    <main>
+      <!-- Today -->
+      <section class="view is-active" id="view-today">
+        <header class="masthead">
+          <p class="eyebrow" id="today-date"></p>
+          <h1>Do the reading.</h1>
+        </header>
+        <div class="today-grid">
+          <article class="card card--feature" id="suggested-card">
+            <p class="eyebrow">Today's paper</p>
+            <h2 id="suggested-title">Nothing processed yet</h2>
+            <p class="meta" id="suggested-meta"></p>
+            <div class="row">
+              <button class="btn btn--primary" id="start-suggested">Start reading</button>
+              <button class="btn" id="shuffle">Suggest another</button>
+            </div>
+          </article>
+          <article class="card" id="review-card" hidden>
+            <p class="eyebrow">Review pile</p>
+            <h2 id="review-title">Questions you missed</h2>
+            <p class="meta">From papers you've already been through.</p>
+            <button class="btn" id="start-review">Work through them</button>
+          </article>
+        </div>
+        <div class="recent" id="recent"></div>
+      </section>
+
+      <!-- Study: PDF beside the current question -->
+      <section class="view view--study" id="view-study">
+        <div class="reader">
+          <div class="reader-bar">
+            <button class="btn btn--ghost" id="leave-study">← Done</button>
+            <h2 id="study-title"></h2>
+            <button class="btn btn--ghost" id="open-pdf" title="Open in your PDF app">Open ↗</button>
+          </div>
+          <iframe id="pdf" title="Paper"></iframe>
+          <p class="reader-empty" id="reader-empty" hidden>The PDF isn't in the library folder.</p>
+        </div>
+
+        <aside class="quiz">
+          <div class="quiz-progress"><span id="quiz-dots"></span></div>
+          <div class="quiz-body" id="quiz-body">
+            <p class="eyebrow" id="q-type"></p>
+            <p class="question" id="q-text"></p>
+
+            <div id="answer-stage">
+              <label class="field" id="typed-field" hidden>
+                <span class="eyebrow">Your answer</span>
+                <textarea id="typed" rows="5" placeholder="Write what you remember…"></textarea>
+              </label>
+              <div class="row">
+                <button class="btn btn--primary" id="reveal">Show answer</button>
+                <button class="btn btn--primary" id="check" hidden>Check my answer</button>
+                <label class="toggle">
+                  <input type="checkbox" id="ai-toggle" />
+                  <span>Grade me with the model</span>
+                </label>
+              </div>
+            </div>
+
+            <div id="verdict" hidden></div>
+
+            <div id="answer-block" hidden>
+              <div class="answer">
+                <p class="eyebrow">Answer</p>
+                <p id="a-text"></p>
+              </div>
+              <blockquote id="evidence" hidden>
+                <p id="e-text"></p>
+                <button class="btn btn--link" id="jump">Jump to page <span id="e-page"></span> ↓</button>
+              </blockquote>
+              <div class="row row--mark">
+                <button class="btn btn--good" id="mark-right">Got it</button>
+                <button class="btn btn--bad" id="mark-wrong">Missed it</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="quiz-done" id="quiz-done" hidden>
+            <p class="eyebrow">Session complete</p>
+            <p class="score" id="score"></p>
+            <ul class="missed" id="missed"></ul>
+            <button class="btn btn--primary" id="finish">Back to today</button>
+          </div>
+        </aside>
+      </section>
+
+      <!-- Library -->
+      <section class="view" id="view-library">
+        <header class="masthead"><p class="eyebrow">Everything processed</p><h1>Library</h1></header>
+        <div id="library-list" class="stack"></div>
+      </section>
+
+      <!-- Inbox -->
+      <section class="view" id="view-inbox">
+        <header class="masthead"><p class="eyebrow">Waiting to be processed</p><h1>Inbox</h1></header>
+        <div class="card">
+          <ul class="files" id="inbox-list"></ul>
+          <div class="row">
+            <button class="btn btn--primary" id="run-inbox">Process now</button>
+            <span class="meta" id="run-note">Runs the same job as the 02:00 task. ~13 min per paper.</span>
+          </div>
+        </div>
+        <pre class="console" id="run-log" hidden></pre>
+      </section>
+
+      <!-- Progress -->
+      <section class="view" id="view-progress">
+        <header class="masthead"><p class="eyebrow">Since you started</p><h1>Progress</h1></header>
+        <div class="figures" id="figures"></div>
+        <div class="card" id="day-card">
+          <p class="eyebrow">Recent days</p>
+          <ul class="days" id="days"></ul>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" hidden></div>
+    <script src="app.js"></script>
+  </body>
+</html>

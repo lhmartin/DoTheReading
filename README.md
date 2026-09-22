@@ -26,7 +26,7 @@ powershell -ExecutionPolicy Bypass -File .\setup.ps1
 
 This will, skipping anything already done:
 
-1. Install Python 3.12, Ollama and Tesseract OCR via `winget` if missing,
+1. Install Python 3.12, Node.js, Ollama and Tesseract OCR via `winget` if missing,
    and set `OLLAMA_FLASH_ATTENTION=1` / `OLLAMA_KV_CACHE_TYPE=q8_0` so the
    model's context cache fits in VRAM alongside the model.
 2. Create `.venv\` in the repo and `pip install -r requirements.txt` into it.
@@ -52,10 +52,39 @@ copy some-paper.pdf $HOME\PaperStudy\inbox\
 Daily use:
 
 ```powershell
-.venv\Scripts\python.exe quiz_me.py            # morning quiz: pick a paper or the review session
+DoTheReading.cmd                               # the app
+.venv\Scripts\python.exe quiz_me.py            # or the CLI quiz
 .venv\Scripts\python.exe quiz_me.py --review   # straight to questions you've missed
 .venv\Scripts\python.exe process_inbox.py      # process the inbox right now
 ```
+
+## The app
+
+`DoTheReading.cmd` (or `npm start --prefix app`) opens the desktop app —
+the paper on the left, its questions on the right.
+
+- **Today** suggests a paper: something you haven't studied, otherwise
+  whatever you looked at longest ago. "Suggest another" reshuffles, and the
+  review pile is one click from the same screen.
+- **Study** shows the PDF beside the current question. Reveal the answer
+  and you get the supporting quote; "Jump to page N" takes the PDF to where
+  it came from. Mark yourself with the buttons or the `y`/`n` keys
+  (`space` reveals).
+- **Grade me with the model** (a checkbox on each question) turns it into
+  a written exercise: type your answer, the local model marks it
+  correct/partly/incorrect with a sentence of feedback, then you still
+  mark yourself. ~10s per answer once the model is loaded.
+- **Library** lists every processed paper with its score and review count,
+  and can show all questions without quizzing.
+- **Inbox** lists PDFs waiting, and "Process now" runs the nightly job
+  immediately with its log streamed into the window.
+- **Progress** shows papers studied, questions answered, accuracy and the
+  review pile over recent days.
+
+The app is a thin UI: it shells out to `study_api.py`, so question files,
+history and prompts have one implementation shared with the CLI. Both can
+be used interchangeably — the app and `quiz_me.py` read and write the same
+`quiz_history.json`.
 
 ## Example: a day in the life
 
@@ -148,6 +177,12 @@ you get them right.
   newest-first, walks through the questions one at a time showing the answer
   plus the supporting quote and page, and records right/wrong. Questions you
   get wrong go into a review pile you can work through later.
+- `study_api.py` — JSON commands (`library`, `record`, `grade`,
+  `process-inbox`) that the desktop app calls; the app never parses
+  question files itself.
+- `app/` — the Electron app: `main.js` (window, spawns `study_api.py`),
+  `preload.js` (the only bridge), `renderer/` (UI).
+- `DoTheReading.cmd` — double-click launcher for the app.
 - `setup.ps1` — the one-command Windows install described above.
 - `tests/` — pytest tests for extraction, chunking, the question format,
   the verification logic (with a scripted fake model) and quiz history.

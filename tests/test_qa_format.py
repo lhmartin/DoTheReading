@@ -52,3 +52,9 @@ def test_parse_model_json_rejects_unusable(raw):
 
 def test_normalize_ignores_pdf_noise():
     assert normalize_for_match("an all-\natom  model, ﬁne") == normalize_for_match("An all-atom model fine")
+
+
+def test_parse_markdown_keeps_question_type():
+    md = render_markdown("T", QUESTIONS)
+    assert [q["type"] for q in parse_markdown(md)] == ["comprehension", "critical"]
+    assert parse_markdown("## Q1\nNo type?\n\n**Answer:** yes\n")[0]["type"] == ""
