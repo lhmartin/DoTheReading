@@ -31,6 +31,17 @@ $RepoDir = $PSScriptRoot
 $VenvPython = Join-Path $RepoDir ".venv\Scripts\python.exe"
 $PaperStudyDir = Join-Path $HOME "PaperStudy"
 
+# PowerShell turns a native command's stderr into a terminating error while
+# $ErrorActionPreference is "Stop" — and plenty of the tools here write normal
+# progress to stderr (ollama pull, npm, the Store's python stub). Run every
+# external command through this so only real exit codes stop us.
+function Invoke-Native {
+    param([Parameter(Mandatory)][scriptblock]$Command)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { & $Command } finally { $ErrorActionPreference = $previous }
+}
+
 function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Info($msg) { Write-Host "    $msg" }
 function Warn($msg) { Write-Host "    WARNING: $msg" -ForegroundColor Yellow }
@@ -46,7 +57,7 @@ function Install-WithWinget($id, $name) {
         throw "winget isn't available. Install $name manually, then re-run this script."
     }
     Info "Installing $name via winget..."
-    winget install --id $id --exact --silent --accept-source-agreements --accept-package-agreements
+    Invoke-Native { winget install --id $id --exact --silent --accept-source-agreements --accept-package-agreements }
     if ($LASTEXITCODE -ne 0) { Warn "winget exited with code $LASTEXITCODE while installing $name." }
     Update-SessionPath
 }
@@ -56,10 +67,12 @@ function Install-WithWinget($id, $name) {
 # "python.exe" stub.
 function Find-Python {
     foreach ($candidate in @(@("py", "-3"), @("python"))) {
-        if (-not (Have $candidate[0])) { continue }
+        $command = Get-Command $candidate[0] -ErrorAction SilentlyContinue
+        # Skip the Microsoft Store's placeholder, which isn't Python at all.
+        if (-not $command -or $command.Source -like "*\WindowsApps\*") { continue }
         $exe = $candidate[0]
         $args_ = @($candidate | Select-Object -Skip 1) + @("-c", "import sys; print(sys.version_info >= (3, 10))")
-        $ok = & $exe @args_ 2>$null
+        $ok = Invoke-Native { & $exe @args_ 2>$null }
         if ($LASTEXITCODE -eq 0 -and "$ok".Trim() -eq "True") { return ,$candidate }  # "," stops PowerShell unrolling the array
     }
     return $null
@@ -80,15 +93,15 @@ if (-not $python) {
 }
 $pyExe = $python[0]
 $pyArgs = @($python | Select-Object -Skip 1)
-Info ("Using " + (& $pyExe @pyArgs --version))
+Info ("Using " + (Invoke-Native { & $pyExe @pyArgs --version }))
 
 Step "Virtual environment + Python packages"
 if (-not (Test-Path $VenvPython)) {
-    & $pyExe @pyArgs -m venv (Join-Path $RepoDir ".venv")
+    Invoke-Native { & $pyExe @pyArgs -m venv (Join-Path $RepoDir ".venv") }
     if ($LASTEXITCODE -ne 0) { throw "Failed to create .venv" }
 }
-& $VenvPython -m pip install --quiet --upgrade pip
-& $VenvPython -m pip install --quiet -r (Join-Path $RepoDir "requirements.txt")
+Invoke-Native { & $VenvPython -m pip install --quiet --upgrade pip }
+Invoke-Native { & $VenvPython -m pip install --quiet -r (Join-Path $RepoDir "requirements.txt") }
 if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 Info "Installed into $RepoDir\.venv"
 
@@ -172,7 +185,7 @@ if ([version]($version.version -replace '[^0-9.].*$', '') -lt [version]"0.5.0") 
 
 if (-not $Model) {
     # Ask the pipeline itself which model it uses, rather than scraping the source.
-    $Model = (& $VenvPython -c "import process_inbox; print(process_inbox.MODEL)").Trim()
+    $Model = (Invoke-Native { & $VenvPython -c "import process_inbox; print(process_inbox.MODEL)" }).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $Model) { throw "Couldn't read MODEL from process_inbox.py; pass -Model explicitly." }
     Info "Model from process_inbox.py: $Model"
 }
@@ -181,7 +194,7 @@ if ($SkipModelPull) {
     Info "Skipping model pull (-SkipModelPull)."
 } else {
     Step "Pulling model $Model (large download on first run)"
-    ollama pull $Model
+    Invoke-Native { ollama pull $Model }
     if ($LASTEXITCODE -ne 0) { throw "ollama pull $Model failed" }
 }
 
@@ -193,7 +206,7 @@ if (-not (Have node)) {
 if (Have npm) {
     Push-Location (Join-Path $RepoDir "app")
     Info "Installing Electron (first run downloads ~100MB)..."
-    npm install --no-fund --no-audit
+    Invoke-Native { npm install --no-fund --no-audit }
     if ($LASTEXITCODE -ne 0) { Warn "npm install failed; the app won't start until it succeeds." }
     Pop-Location
     Info "Start it with DoTheReading.cmd (or: npm start --prefix app)."

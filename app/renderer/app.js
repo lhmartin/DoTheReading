@@ -159,6 +159,7 @@ async function runInbox() {
     toast(err.message, 8000);
   }
   await refresh();
+renderSettings();
 }
 
 // ---- progress -----------------------------------------------------------
@@ -187,6 +188,119 @@ function renderProgress() {
       </li>`,
     )
     .join("");
+}
+
+// ---- settings -----------------------------------------------------------
+
+function qualityTag(quality) {
+  const label = { best: "best quality", weaker: "weaker", weakest: "weakest" }[quality] || quality;
+  return `<span class="tag tag--${quality === "best" ? "done" : "review"}">${label}</span>`;
+}
+
+async function renderSettings() {
+  let env;
+  try {
+    env = await window.study.environment();
+  } catch (err) {
+    return toast(err.message, 8000);
+  }
+  state.env = env;
+  const { ollama, models, tesseract, scheduled_task: task, settings } = env;
+
+  const checks = [
+    [ollama.running, ollama.running ? `Ollama ${ollama.version} is running` : "Ollama isn't running — start it, then hit Refresh"],
+    [models.selected_installed, models.selected_installed
+      ? `Model ready: ${models.selected}`
+      : `Model not downloaded: ${models.selected} — pick one below`],
+    [tesseract, tesseract ? "Tesseract found (scanned PDFs can be OCR'd)" : "No Tesseract — scanned PDFs will be skipped"],
+  ];
+  if (task.supported) {
+    checks.push([task.registered, task.registered ? "Nightly run is scheduled" : "No nightly run scheduled"]);
+  }
+  $("checks").innerHTML = checks
+    .map(([ok, text]) => `<li class="${ok ? "is-ok" : "is-warn"}">${escapeHtml(text)}</li>`)
+    .join("");
+  const blocking = !ollama.running || !models.selected_installed;
+  $("settings-pip").hidden = !blocking;
+
+  // Model picker: everything installed, plus suggestions worth downloading.
+  const installed = new Map(models.installed.map((m) => [m.name, m]));
+  const rows = models.suggested.map((m) => ({ ...m, installed: installed.has(m.name) }));
+  for (const m of models.installed) {
+    if (!rows.some((row) => row.name === m.name)) {
+      rows.push({ name: m.name, size: `${(m.size_bytes / 1e9).toFixed(1)} GB`, installed: true, note: "", quality: "" });
+    }
+  }
+  $("model-note").textContent =
+    "Smaller models are faster but write shallower questions and check them less reliably — the 14b kept an answer that contradicted the paper in 3 of 3 test runs, where the 32b rejected it every time.";
+  $("model-list").innerHTML = rows
+    .map(
+      (m) => `
+      <label class="model ${m.name === models.selected ? "is-selected" : ""}">
+        <input type="radio" name="model" value="${escapeHtml(m.name)}" ${m.name === models.selected ? "checked" : ""} />
+        <span class="model-main">
+          <b>${escapeHtml(m.name)}</b>
+          <span class="tags">
+            <span class="tag">${m.size}</span>
+            ${m.quality ? qualityTag(m.quality) : ""}
+            ${m.installed ? "" : `<span class="tag">not downloaded</span>`}
+          </span>
+          ${m.note ? `<span class="meta">${escapeHtml(m.note)}</span>` : ""}
+        </span>
+        ${m.installed ? "" : `<button class="btn" data-pull="${escapeHtml(m.name)}">Download</button>`}
+      </label>`,
+    )
+    .join("");
+
+  $("num-questions").value = settings.num_questions;
+  $("guidance").value = settings.guidance;
+  $("settings-note").textContent = "";
+
+  $("schedule-card").hidden = !task.supported;
+  $("schedule-state").textContent = task.registered
+    ? "The 02:00 job is registered and will wake the machine."
+    : "Nothing scheduled: papers are only processed when you press Process now.";
+  $("schedule-add").hidden = task.registered;
+  $("schedule-remove").hidden = !task.registered;
+}
+
+async function saveSettings() {
+  const model = document.querySelector('input[name="model"]:checked')?.value;
+  try {
+    await window.study.saveSettings({
+      model,
+      numQuestions: Number($("num-questions").value) || undefined,
+      guidance: $("guidance").value,
+    });
+    $("settings-note").textContent = "Saved — applies to the next run.";
+    renderSettings();
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+}
+
+async function pullModel(name) {
+  const log = $("pull-log");
+  log.hidden = false;
+  log.textContent = `Downloading ${name}…\n`;
+  try {
+    await window.study.pullModel(name);
+    toast(`${name} downloaded`);
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+  renderSettings();
+}
+
+async function setSchedule(action) {
+  try {
+    const result = await window.study.schedule({ action, time: "02:00" });
+    if (!result.ok) throw new Error(result.error || "Couldn't change the schedule");
+    toast(action === "add" ? "Nightly run scheduled" : "Nightly run removed");
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+  renderSettings();
 }
 
 // ---- study session ------------------------------------------------------
@@ -345,16 +459,21 @@ function finishSession() {
       missed.map((item) => `<li>${escapeHtml(item.question.question)}</li>`).join("")
     : "";
   refresh();
+renderSettings();
 }
 
 // ---- wiring -------------------------------------------------------------
 
 document.querySelectorAll(".rail-btn[data-view]").forEach((button) => {
-  button.addEventListener("click", () => show(button.dataset.view));
+  button.addEventListener("click", () => {
+    show(button.dataset.view);
+    if (button.dataset.view === "settings") renderSettings();
+  });
 });
 
 $("refresh").addEventListener("click", () => {
   refresh();
+renderSettings();
   toast("Reloaded");
 });
 
@@ -372,6 +491,11 @@ document.addEventListener("click", (event) => {
   if (study) return startPaper(study.dataset.study);
   const peek = event.target.closest("[data-peek]");
   if (peek) return togglePeek(peek.dataset.peek);
+  const pull = event.target.closest("[data-pull]");
+  if (pull) {
+    event.preventDefault();
+    return pullModel(pull.dataset.pull);
+  }
 });
 
 $("reveal").addEventListener("click", revealAnswer);
@@ -389,10 +513,20 @@ $("open-pdf").addEventListener("click", () => {
 $("leave-study").addEventListener("click", () => {
   show("today");
   refresh();
+renderSettings();
 });
 $("finish").addEventListener("click", () => {
   show("today");
   state.session = null;
+});
+
+$("save-settings").addEventListener("click", saveSettings);
+$("schedule-add").addEventListener("click", () => setSchedule("add"));
+$("schedule-remove").addEventListener("click", () => setSchedule("remove"));
+window.study.onPullLog((line) => {
+  const log = $("pull-log");
+  log.textContent += line + "\n";
+  log.scrollTop = log.scrollHeight;
 });
 
 $("run-inbox").addEventListener("click", runInbox);
@@ -415,3 +549,4 @@ document.addEventListener("keydown", (event) => {
 });
 
 refresh();
+renderSettings();

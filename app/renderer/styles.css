@@ -392,3 +392,57 @@ blockquote p {
   .today-grid { grid-template-columns: 1fr; }
   .view--study.is-active { grid-template-columns: 1fr; }
 }
+
+/* ---- settings ---------------------------------------------------------- */
+
+.pip--warn { background: var(--gold); color: var(--ink); }
+
+.checks { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.checks li { font-size: 14.5px; padding-left: 26px; position: relative; }
+.checks li::before {
+  position: absolute; left: 0; top: -1px;
+  font-family: var(--serif); font-size: 16px;
+}
+.checks .is-ok::before { content: "\2713"; color: var(--moss); }
+.checks .is-warn::before { content: "!"; color: var(--gold); font-weight: 700; }
+
+.model-list { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.model {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--paper-2);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.model:hover { border-color: var(--ink-faint); }
+.model.is-selected { border-color: var(--oxblood); background: #fffdf8; }
+.model input { margin-top: 4px; accent-color: var(--oxblood); }
+.model-main { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.model-main b { font-family: var(--mono); font-size: 13.5px; font-weight: 400; }
+.model .meta { margin: 0; font-size: 13px; }
+
+#num-questions {
+  width: 90px;
+  margin-top: 8px;
+  font: inherit;
+  padding: 9px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: #fffdf8;
+  color: var(--ink);
+}
+#guidance {
+  width: 100%;
+  margin-top: 8px;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: #fffdf8;
+  color: var(--ink);
+  resize: vertical;
+}

@@ -7,22 +7,27 @@ const fs = require("fs");
 
 const REPO_DIR = path.join(__dirname, "..");
 
-function pythonPath() {
+// Installed builds ship the pipeline frozen by PyInstaller; running from a
+// checkout uses the repo's .venv (or whatever Python is on PATH).
+function pipelineCommand(args) {
+  if (app.isPackaged) {
+    const exe = path.join(process.resourcesPath, "pipeline", process.platform === "win32" ? "study_api.exe" : "study_api");
+    return { command: exe, args, cwd: path.dirname(exe) };
+  }
   const candidates =
     process.platform === "win32"
       ? [path.join(REPO_DIR, ".venv", "Scripts", "python.exe"), "python"]
       : [path.join(REPO_DIR, ".venv", "bin", "python"), "python3"];
-  return candidates.find((p) => !p.includes(path.sep) || fs.existsSync(p)) || candidates.at(-1);
+  const python = candidates.find((p) => !p.includes(path.sep) || fs.existsSync(p)) || candidates.at(-1);
+  return { command: python, args: [path.join(REPO_DIR, "study_api.py"), ...args], cwd: REPO_DIR };
 }
 
 // Runs study_api.py and resolves with the JSON object it prints last.
 // onLine gets every other JSON line (the streamed log of a run).
 function callApi(args, onLine) {
   return new Promise((resolve, reject) => {
-    const child = spawn(pythonPath(), [path.join(REPO_DIR, "study_api.py"), ...args], {
-      cwd: REPO_DIR,
-      env: process.env,
-    });
+    const { command, args: commandArgs, cwd } = pipelineCommand(args);
+    const child = spawn(command, commandArgs, { cwd, env: process.env });
     let stdout = "";
     let stderr = "";
     let last = null;
@@ -48,7 +53,7 @@ function callApi(args, onLine) {
     child.on("close", (code) => {
       if (last && last.error) reject(new Error(last.error));
       else if (last) resolve(last);
-      else reject(new Error(stderr.trim().split("\n").at(-1) || `study_api.py exited with code ${code}`));
+      else reject(new Error(stderr.trim().split("\n").at(-1) || `the pipeline exited with code ${code}`));
     });
   });
 }
@@ -102,6 +107,26 @@ ipcMain.handle("grade", (_event, { paper, question, reference, evidence, answer 
 
 ipcMain.handle("process-inbox", (event) =>
   callApi(["process-inbox"], (line) => event.sender.send("process-log", line)),
+);
+
+ipcMain.handle("settings", () => callApi(["settings"]));
+
+ipcMain.handle("save-settings", (_event, { model, numQuestions, guidance }) => {
+  const args = ["save-settings"];
+  if (model) args.push("--model", model);
+  if (numQuestions) args.push("--num-questions", String(numQuestions));
+  if (guidance !== undefined) args.push("--guidance", guidance);
+  return callApi(args);
+});
+
+ipcMain.handle("environment", () => callApi(["environment"]));
+
+ipcMain.handle("pull-model", (event, model) =>
+  callApi(["pull-model", "--model", model], (line) => event.sender.send("pull-log", line)),
+);
+
+ipcMain.handle("schedule", (_event, { action, time }) =>
+  callApi(["schedule", "--action", action, ...(time ? ["--time", time] : [])]),
 );
 
 ipcMain.handle("open-external", (_event, target) => shell.openPath(target));

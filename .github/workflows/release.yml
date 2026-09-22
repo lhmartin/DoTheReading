@@ -1,0 +1,85 @@
+name: Release
+
+# Tag a version (git tag v1.0.0 && git push origin v1.0.0) and a Windows
+# runner builds the installer and attaches it to the release. Run it manually
+# from the Actions tab to get an unpublished build to test.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt pyinstaller
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Freeze the pipeline
+        run: pyinstaller pipeline.spec --noconfirm
+
+      - name: Smoke-test the frozen pipeline
+        shell: pwsh
+        env:
+          PAPERSTUDY_DIR: ${{ runner.temp }}/PaperStudy
+        run: |
+          $out = & dist\pipeline\study_api.exe settings | ConvertFrom-Json
+          if (-not $out.settings.model) { throw "study_api.exe didn't return settings" }
+          "settings OK: model $($out.settings.model)"
+          $library = & dist\pipeline\study_api.exe library | ConvertFrom-Json
+          if ($null -eq $library.stats) { throw "study_api.exe didn't return a library" }
+          "library OK: $($library.stats.papers) paper(s) in a fresh folder"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install app dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: app
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          npm version --no-git-tag-version --allow-same-version $version
+
+      - name: Build the installer
+        working-directory: app
+        run: npx electron-builder --win --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DoTheReading-installer
+          path: release/*.exe
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe
+          body: |
+            **DoTheReading** — download `DoTheReading-Setup-*.exe` below.
+
+            The installer contains the app and the whole Python pipeline, so
+            no Python install is needed. On first run the app's Settings tab
+            checks for Ollama and offers to download a model (the model is a
+            separate ~14 GB download; a smaller one can be chosen there).

@@ -21,21 +21,19 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+import settings
 from paper_qa_lib import extract_text, find_title, generate_questions
 from qa_format import render_markdown
 
 # ---- CONFIG -----------------------------------------------------------
-BASE_DIR = Path.home() / "PaperStudy"
+# Folders. The model, how many questions to keep, and any prompt guidance
+# live in ~/PaperStudy/settings.json — change them in the app, or by hand
+# (see settings.py for the defaults).
+BASE_DIR = settings.base_dir()
 INBOX_DIR = BASE_DIR / "inbox"          # drop new PDFs here during the day
 LIBRARY_DIR = BASE_DIR / "library"      # processed PDFs get moved here
 QUESTIONS_DIR = BASE_DIR / "questions"  # generated .md question sets land here
 LOG_FILE = BASE_DIR / "process_log.txt"
-
-# q3_K_S (14GB) fits in 16GB VRAM alongside the KV cache, so it runs almost
-# entirely on the GPU: ~3x faster than q4_K_M (19GB), which spills ~35% onto
-# the CPU. Needs the Ollama memory settings that setup.ps1 configures.
-MODEL = "qwen2.5:32b-instruct-q3_K_S"
-NUM_QUESTIONS = 12
 # ------------------------------------------------------------------------
 
 
@@ -48,6 +46,8 @@ def log(message: str):
 
 
 def main():
+    config = settings.load()
+    log_config = f"model {config['model']}, {config['num_questions']} questions"
     for d in (INBOX_DIR, LIBRARY_DIR, QUESTIONS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -56,7 +56,7 @@ def main():
         log("No new papers in inbox. Nothing to do.")
         return
 
-    log(f"Found {len(pdfs)} paper(s) to process.")
+    log(f"Found {len(pdfs)} paper(s) to process. Using {log_config}.")
 
     for pdf_path in pdfs:
         questions_path = QUESTIONS_DIR / (pdf_path.stem + "_questions.md")
@@ -71,9 +71,10 @@ def main():
                 log(f"  WARNING: no extractable text in {pdf_path.name}, even after OCR. Skipping.")
                 continue
 
-            title = find_title(str(pdf_path), text, MODEL, log=log) or pdf_path.stem
+            title = find_title(str(pdf_path), text, config["model"], log=log) or pdf_path.stem
             log(f"    title: {title}")
-            questions, summary = generate_questions(text, MODEL, NUM_QUESTIONS, log=log)
+            questions, summary = generate_questions(text, config["model"], config["num_questions"],
+                                                    log=log, guidance=config["guidance"])
             if not questions:
                 log(f"  WARNING: no questions passed verification for {pdf_path.name}. Leaving it in the inbox.")
                 continue

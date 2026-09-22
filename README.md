@@ -14,7 +14,26 @@ model, and a morning script quizzes you on whichever paper you pick.
 - Target model: `qwen2.5:32b-instruct-q3_K_S` — the 32B model at a
   quantization that fits in 16GB VRAM (see Performance below).
 
-## Setup (one command)
+## Install
+
+**Easiest: download the installer.** Grab `DoTheReading-Setup-*.exe` from
+[Releases](https://github.com/lhmartin/DoTheReading/releases). It contains
+the app and the whole Python pipeline (frozen with PyInstaller), so no
+Python install is needed. On first run, the app's **Settings** tab checks
+what's missing and offers to fix it:
+
+- **Ollama** — install it once from [ollama.com](https://ollama.com); the
+  app tells you if it isn't running.
+- **A model** — pick one in Settings and press Download (the default is
+  ~14 GB; smaller ones are offered, with their trade-offs spelled out).
+- **Nightly run** — one button registers the 02:00 task (and another
+  removes it).
+- **Tesseract** — optional, only for scanned PDFs.
+
+The sections below are the from-source route, which you also want if you
+like the CLI or plan to change the code.
+
+## Setup from source (one command)
 
 Clone the repo onto the **Windows** drive (not inside WSL — Task Scheduler
 and Windows Python can't reliably run from a `\\wsl$` path), then from
@@ -60,8 +79,9 @@ DoTheReading.cmd                               # the app
 
 ## The app
 
-`DoTheReading.cmd` (or `npm start --prefix app`) opens the desktop app —
-the paper on the left, its questions on the right.
+Installed, it's in the Start menu. From a checkout, `DoTheReading.cmd` (or
+`npm start --prefix app`) opens it — the paper on the left, its questions
+on the right.
 
 - **Today** suggests a paper: something you haven't studied, otherwise
   whatever you looked at longest ago. "Suggest another" reshuffles, and the
@@ -80,6 +100,19 @@ the paper on the left, its questions on the right.
   immediately with its log streamed into the window.
 - **Progress** shows papers studied, questions answered, accuracy and the
   review pile over recent days.
+- **Settings** holds the setup checklist, the model picker, how many
+  questions per paper, a free-text steer added to every generation prompt
+  ("I'm a wet-lab biologist: favour experimental design over the maths"),
+  and the nightly-run toggle. These live in `~/PaperStudy/settings.json`,
+  so the 02:00 job uses the same choices.
+
+**On picking a smaller model:** the app lists each model's size and a
+plain-language quality note, because the trade-off is real. Verification
+depends on the model actually reading the passage: on a question whose
+answer stated the opposite of the paper, both 32b quantizations rejected
+it 3/3, while `qwen2.5:14b` kept it 3/3 — it misread the text itself.
+Smaller models also write shallower questions. Faster is genuinely worse
+here; the app says so where you choose.
 
 The app is a thin UI: it shells out to `study_api.py`, so question files,
 history and prompts have one implementation shared with the CLI. Both can
@@ -183,6 +216,12 @@ you get them right.
 - `app/` — the Electron app: `main.js` (window, spawns `study_api.py`),
   `preload.js` (the only bridge), `renderer/` (UI).
 - `DoTheReading.cmd` — double-click launcher for the app.
+- `settings.py` — reads/writes `~/PaperStudy/settings.json` (model,
+  question count, prompt guidance). Standard library only.
+- `pipeline.spec` — PyInstaller recipe that freezes the pipeline for the
+  installer.
+- `.github/workflows/release.yml` — tag `v*` and a Windows runner builds
+  the installer and attaches it to the release.
 - `setup.ps1` — the one-command Windows install described above.
 - `tests/` — pytest tests for extraction, chunking, the question format,
   the verification logic (with a scripted fake model) and quiz history.

@@ -12,6 +12,7 @@
       <button class="rail-btn" data-view="library"><span>Library</span></button>
       <button class="rail-btn" data-view="inbox"><span>Inbox</span><em class="pip" id="inbox-pip" hidden></em></button>
       <button class="rail-btn" data-view="progress"><span>Progress</span></button>
+      <button class="rail-btn" data-view="settings"><span>Settings</span><em class="pip pip--warn" id="settings-pip" hidden>!</em></button>
       <button class="rail-btn rail-btn--foot" id="refresh"><span>Refresh</span></button>
     </nav>
 
@@ -128,6 +129,48 @@
         <div class="card" id="day-card">
           <p class="eyebrow">Recent days</p>
           <ul class="days" id="days"></ul>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="view" id="view-settings">
+        <header class="masthead"><p class="eyebrow">How papers get turned into questions</p><h1>Settings</h1></header>
+
+        <div class="card">
+          <p class="eyebrow">Setup</p>
+          <ul class="checks" id="checks"></ul>
+        </div>
+
+        <div class="card" style="margin-top:18px">
+          <p class="eyebrow">Model</p>
+          <p class="meta" id="model-note"></p>
+          <div class="model-list" id="model-list"></div>
+          <pre class="console" id="pull-log" hidden></pre>
+        </div>
+
+        <div class="card" style="margin-top:18px">
+          <p class="eyebrow">Questions</p>
+          <label class="field">
+            <span class="meta">How many per paper</span>
+            <input type="number" id="num-questions" min="1" max="50" />
+          </label>
+          <label class="field" style="margin-top:16px">
+            <span class="meta">Tailor the questions (optional) — added to the prompt for every paper</span>
+            <textarea id="guidance" rows="4" placeholder="e.g. I'm a wet-lab biologist: favour experimental design and controls over the maths."></textarea>
+          </label>
+          <div class="row">
+            <button class="btn btn--primary" id="save-settings">Save</button>
+            <span class="meta" id="settings-note"></span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:18px" id="schedule-card">
+          <p class="eyebrow">Nightly run</p>
+          <p class="meta" id="schedule-state"></p>
+          <div class="row">
+            <button class="btn" id="schedule-add">Run every night at 02:00</button>
+            <button class="btn" id="schedule-remove" hidden>Stop running nightly</button>
+          </div>
         </div>
       </section>
     </main>

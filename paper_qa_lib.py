@@ -346,7 +346,8 @@ def balance_types(ranked: list[dict]) -> list[dict]:
 # for a shared prompt prefix, so several checks against the same section
 # only pay to read the section once.
 
-def build_prompt(text_chunk: str, num_questions: int, section_label: str, overlapping: bool = False) -> str:
+def build_prompt(text_chunk: str, num_questions: int, section_label: str, overlapping: bool = False,
+                 guidance: str = "") -> str:
     # Dedent the template before appending the paper text: interpolating the
     # (unindented) text first would stop dedent from stripping anything.
     prompt = textwrap.dedent(f"""\
@@ -360,6 +361,9 @@ def build_prompt(text_chunk: str, num_questions: int, section_label: str, overla
             text repeat the end of the previous section for context only. Don't
             ask questions about them or about this instruction.)
         """)
+    if guidance.strip():
+        # The reader's own steer, e.g. "focus on experimental design".
+        prompt += "\nWhat this reader wants from the questions:\n" + guidance.strip() + "\n"
     prompt += textwrap.dedent("""
         Include a mix of:
         - comprehension questions (what did they do / find)
@@ -525,7 +529,8 @@ def rank_candidates(candidates: list[dict], num_questions: int, model: str, log=
     return ranked or candidates
 
 
-def generate_questions(text: str, model: str, num_questions: int, log=print) -> tuple[list[dict], str]:
+def generate_questions(text: str, model: str, num_questions: int, log=print,
+                       guidance: str = "") -> tuple[list[dict], str]:
     """Generate, rank and verify questions. Returns (questions, summary)
     where each question dict has type, question, answer, evidence, page."""
     chunks = chunk_text(text)
@@ -539,7 +544,8 @@ def generate_questions(text: str, model: str, num_questions: int, log=print) -> 
         if len(chunks) > 1:
             log(f"      section {i + 1}/{len(chunks)}...")
         label = "the full text" if len(chunks) == 1 else f"section {i + 1} of {len(chunks)}"
-        for q in ask_for_questions(build_prompt(chunk, per_chunk, label, overlapping=i > 0), model, log):
+        prompt = build_prompt(chunk, per_chunk, label, overlapping=i > 0, guidance=guidance)
+        for q in ask_for_questions(prompt, model, log):
             q["chunk"] = i
             candidates.append(q)
 

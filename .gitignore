@@ -219,3 +219,12 @@ __marimo__/
 
 # Electron app
 app/node_modules/
+
+# Build outputs (repo root only: app/build holds the icon and is committed)
+/dist/
+/build/
+/release/
+
+# ...but the app icon lives in app/build and must be committed
+!app/build/
+!app/build/**

@@ -19,18 +19,40 @@ Every command prints one JSON object on stdout.
 import argparse
 import json
 import os
+import platform
 import random
+import subprocess
 import sys
 from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+import settings
 from qa_format import parse_markdown, parse_title
 from quiz_history import QuizHistory, question_key
 
+OLLAMA_HOST = "http://localhost:11434"
+TASK_NAME = "PaperStudyNightly"
+
+# Models worth offering, largest first. Verification quality tracks the
+# model's reading: see `quality` — surfaced in the app so a smaller pick is
+# an informed one.
+SUGGESTED_MODELS = [
+    {"name": "qwen2.5:32b-instruct-q4_K_M", "size": "19 GB", "quality": "best",
+     "note": "Sharpest questions. Too big for 16GB VRAM, so ~3x slower (~35 min/paper)."},
+    {"name": "qwen2.5:32b-instruct-q3_K_S", "size": "14 GB", "quality": "best",
+     "note": "Default. Fits in 16GB VRAM; same verification accuracy as q4_K_M in testing (~13 min/paper)."},
+    {"name": "qwen2.5:14b", "size": "9 GB", "quality": "weaker",
+     "note": "~10x faster, but it misread a passage and kept an answer that contradicted the paper in 3/3 trials."},
+    {"name": "qwen2.5:7b", "size": "4.7 GB", "quality": "weakest",
+     "note": "For low-VRAM machines. Expect shallower questions and less reliable checking."},
+]
+
 
 def base_dir(args) -> Path:
-    return Path(args.base or os.environ.get("PAPERSTUDY_DIR") or (Path.home() / "PaperStudy"))
+    if args.base:
+        os.environ["PAPERSTUDY_DIR"] = args.base  # so settings.py agrees
+    return settings.base_dir()
 
 
 def paper_stem(md_path: Path) -> str:
@@ -141,7 +163,6 @@ GRADE_SCHEMA = {
 def cmd_grade(args) -> dict:
     # Imported here: only grading needs the pipeline's heavier dependencies.
     import paper_qa_lib
-    import process_inbox
     import textwrap
 
     prompt = textwrap.dedent(f"""\
@@ -165,20 +186,14 @@ def cmd_grade(args) -> dict:
         Respond with JSON only:
         {{"verdict": "correct" | "partly" | "incorrect", "feedback": "<one sentence>"}}
     """)
-    graded = paper_qa_lib.ask_json(prompt, args.model or process_inbox.MODEL, GRADE_SCHEMA, log=lambda m: None)
+    graded = paper_qa_lib.ask_json(prompt, args.model or settings.load()["model"], GRADE_SCHEMA, log=lambda m: None)
     return {"verdict": graded.get("verdict", "partly"), "feedback": graded.get("feedback", "")}
 
 
 def cmd_process_inbox(args) -> dict:
     """Run the nightly job now, streaming its log lines as JSON objects."""
+    base_dir(args)
     import process_inbox
-
-    base = base_dir(args)
-    process_inbox.BASE_DIR = base
-    process_inbox.INBOX_DIR = base / "inbox"
-    process_inbox.LIBRARY_DIR = base / "library"
-    process_inbox.QUESTIONS_DIR = base / "questions"
-    process_inbox.LOG_FILE = base / "process_log.txt"
 
     original_log = process_inbox.log
 
@@ -192,6 +207,126 @@ def cmd_process_inbox(args) -> dict:
         return {"ok": True}
     except SystemExit as e:  # e.g. Ollama not running
         return {"ok": False, "error": str(e)}
+
+
+def ollama_get(path: str, timeout: float = 3.0):
+    import requests
+
+    return requests.get(f"{OLLAMA_HOST}{path}", timeout=timeout).json()
+
+
+def cmd_settings(args) -> dict:
+    base_dir(args)
+    return {"settings": settings.load(), "defaults": settings.DEFAULTS, "path": str(settings.settings_path())}
+
+
+def cmd_save_settings(args) -> dict:
+    base_dir(args)
+    changes = {}
+    if args.model:
+        changes["model"] = args.model
+    if args.num_questions:
+        changes["num_questions"] = int(args.num_questions)
+    if args.guidance is not None:
+        changes["guidance"] = args.guidance
+    return {"settings": settings.save(changes)}
+
+
+def cmd_environment(args) -> dict:
+    """What the pipeline needs, and whether it's there: for the app's setup
+    checklist."""
+    base_dir(args)
+    current = settings.load()
+    installed, running, version = [], False, None
+    try:
+        version = ollama_get("/api/version").get("version")
+        running = True
+        installed = [{"name": m["name"], "size_bytes": m.get("size")} for m in ollama_get("/api/tags").get("models", [])]
+    except Exception:
+        pass
+
+    tesseract = None
+    try:
+        import paper_qa_lib
+
+        tesseract = paper_qa_lib.ocr_available()
+    except Exception:
+        pass
+
+    return {
+        "ollama": {"running": running, "version": version},
+        "models": {
+            "installed": installed,
+            "suggested": SUGGESTED_MODELS,
+            "selected": current["model"],
+            "selected_installed": any(m["name"] == current["model"] for m in installed),
+        },
+        "tesseract": tesseract,
+        "scheduled_task": scheduled_task_state(),
+        "settings": current,
+        "base": str(settings.base_dir()),
+    }
+
+
+def cmd_pull_model(args) -> dict:
+    """Pull a model, streaming Ollama's progress as {"log": ...} lines."""
+    import requests
+
+    seen = None
+    with requests.post(f"{OLLAMA_HOST}/api/pull", json={"model": args.model}, stream=True, timeout=None) as response:
+        response.raise_for_status()
+        for line in response.iter_lines():
+            if not line:
+                continue
+            update = json.loads(line)
+            if update.get("error"):
+                return {"ok": False, "error": update["error"]}
+            status = update.get("status", "")
+            total, completed = update.get("total"), update.get("completed")
+            if total and completed:
+                percent = int(completed / total * 100)
+                status = f"{status} — {percent}% of {total / 1e9:.1f} GB"
+            if status != seen:
+                seen = status
+                print(json.dumps({"log": status}), flush=True)
+    return {"ok": True, "model": args.model}
+
+
+# ---- the nightly scheduled task (Windows) --------------------------------
+
+def scheduled_task_state() -> dict:
+    if platform.system() != "Windows":
+        return {"supported": False, "registered": False}
+    try:
+        found = subprocess.run(["schtasks", "/query", "/tn", TASK_NAME], capture_output=True, text=True)
+        return {"supported": True, "registered": found.returncode == 0, "name": TASK_NAME}
+    except OSError:
+        return {"supported": False, "registered": False}
+
+
+def cmd_schedule(args) -> dict:
+    """Register or remove the nightly task, from the app's settings."""
+    if platform.system() != "Windows":
+        return {"ok": False, "error": "Scheduling is Windows-only."}
+
+    if args.action == "remove":
+        done = subprocess.run(["schtasks", "/delete", "/tn", TASK_NAME, "/f"], capture_output=True, text=True)
+        return {"ok": done.returncode == 0, "error": done.stderr.strip(), "state": scheduled_task_state()}
+
+    # Run this same executable (frozen study_api.exe, or python study_api.py).
+    if getattr(sys, "frozen", False):
+        command = f'"{sys.executable}" process-inbox'
+    else:
+        command = f'"{sys.executable}" "{Path(__file__).resolve()}" process-inbox'
+    script = (
+        f"$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c {command}';"
+        f"$trigger = New-ScheduledTaskTrigger -Daily -At {args.time};"
+        "$settings = New-ScheduledTaskSettingsSet -WakeToRun;"
+        f"Register-ScheduledTask -TaskName '{TASK_NAME}' -Action $action -Trigger $trigger "
+        "-Settings $settings -Description 'Generate study questions for new PDFs' -Force | Out-Null"
+    )
+    done = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True)
+    return {"ok": done.returncode == 0, "error": done.stderr.strip(), "state": scheduled_task_state()}
 
 
 def main():
@@ -212,10 +347,26 @@ def main():
     grade.add_argument("--model", default="")
 
     sub.add_parser("process-inbox")
+    sub.add_parser("settings")
+    sub.add_parser("environment")
+
+    save_settings = sub.add_parser("save-settings")
+    save_settings.add_argument("--model")
+    save_settings.add_argument("--num-questions", dest="num_questions")
+    save_settings.add_argument("--guidance")
+
+    pull = sub.add_parser("pull-model")
+    pull.add_argument("--model", required=True)
+
+    schedule = sub.add_parser("schedule")
+    schedule.add_argument("--action", required=True, choices=["add", "remove"])
+    schedule.add_argument("--time", default="02:00")
 
     args = parser.parse_args()
     commands = {"library": cmd_library, "record": cmd_record, "grade": cmd_grade,
-                "process-inbox": cmd_process_inbox}
+                "process-inbox": cmd_process_inbox, "settings": cmd_settings,
+                "save-settings": cmd_save_settings, "environment": cmd_environment,
+                "pull-model": cmd_pull_model, "schedule": cmd_schedule}
     try:
         result = commands[args.command](args)
     except Exception as e:
