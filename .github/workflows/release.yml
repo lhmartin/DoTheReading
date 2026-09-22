@@ -66,6 +66,22 @@ jobs:
         working-directory: app
         run: npx electron-builder --win --publish never
 
+      - name: Smoke-test the packaged app
+        shell: pwsh
+        env:
+          PAPERSTUDY_DIR: ${{ runner.temp }}/PaperStudy
+        run: |
+          $exe = "release\win-unpacked\DoTheReading.exe"
+          if (-not (Test-Path $exe)) { throw "packaged app not found at $exe" }
+          $result = "$env:RUNNER_TEMP\selftest.json"
+          $env:DTR_SELFTEST = $result
+          & $exe | Out-Null
+          if (-not (Test-Path $result)) { throw "the packaged app wrote no self-test result" }
+          $check = Get-Content $result | ConvertFrom-Json
+          "self-test: $(Get-Content $result)"
+          if (-not $check.ok) { throw "packaged app self-test failed: $($check.error)" }
+          if (-not $check.packaged) { throw "self-test didn't run against the packaged build" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: DoTheReading-installer

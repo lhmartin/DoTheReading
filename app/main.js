@@ -58,8 +58,40 @@ function callApi(args, onLine) {
   });
 }
 
+// Self-test: launch with DTR_SELFTEST=<file> and the app loads the UI, asks
+// the pipeline for its environment through the real preload bridge, writes
+// the result to that file and exits. CI runs this against the packaged build
+// so a broken pipeline path is caught before a release goes out.
+function runSelfTest(win, resultFile) {
+  const finish = (result) => {
+    try {
+      fs.writeFileSync(resultFile, JSON.stringify(result));
+    } catch (err) {
+      console.error(err);
+    }
+    app.exit(result.ok ? 0 : 1);
+  };
+  const timer = setTimeout(() => finish({ ok: false, error: "timed out after 90s" }), 90_000);
+  win.webContents.once("did-finish-load", async () => {
+    try {
+      const environment = await win.webContents.executeJavaScript("window.study.environment()");
+      clearTimeout(timer);
+      finish({
+        ok: Boolean(environment && environment.settings && environment.settings.model),
+        packaged: app.isPackaged,
+        model: environment?.settings?.model,
+        ollamaRunning: environment?.ollama?.running,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      finish({ ok: false, error: String(err && err.message ? err.message : err) });
+    }
+  });
+}
+
 function createWindow() {
   const win = new BrowserWindow({
+    show: !process.env.DTR_SELFTEST,
     width: 1400,
     height: 900,
     backgroundColor: "#12151c",
@@ -72,6 +104,8 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
+
+  if (process.env.DTR_SELFTEST) runSelfTest(win, process.env.DTR_SELFTEST);
 
   // Dev hook: DTR_SHOT=<file> renders, optionally runs DTR_SHOT_JS, saves a
   // PNG of the window and exits. Used to check the UI while developing.
