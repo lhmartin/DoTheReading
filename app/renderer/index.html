@@ -147,6 +147,10 @@
         <div class="card">
           <p class="eyebrow">Setup</p>
           <ul class="checks" id="checks"></ul>
+          <div class="row" id="ollama-row" hidden>
+            <button class="btn" id="start-ollama">Start Ollama</button>
+            <span class="meta">Nothing is answering on localhost:11434.</span>
+          </div>
           <div class="row" id="memory-row" hidden>
             <button class="btn" id="fix-memory">Apply speed settings</button>
             <span class="meta">Sets Ollama's flash attention and 8-bit context cache, then restarts it.</span>

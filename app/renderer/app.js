@@ -399,7 +399,8 @@ async function renderSettings() {
   $("checks").innerHTML = checks
     .map(([ok, text]) => `<li class="${ok ? "is-ok" : "is-warn"}">${escapeHtml(text)}</li>`)
     .join("");
-  $("memory-row").hidden = !(memory.supported && !memory.ok);
+  $("ollama-row").hidden = ollama.running;
+  $("memory-row").hidden = !(memory.supported && !memory.ok) || !ollama.running;
   const blocking = !ollama.running || !models.selected_installed;
   $("settings-pip").hidden = !blocking;
 
@@ -686,12 +687,27 @@ $("finish").addEventListener("click", () => {
 $("save-settings").addEventListener("click", saveSettings);
 $("model-select").addEventListener("change", describeSelectedModel);
 $("model-download").addEventListener("click", () => pullModel($("model-select").value));
+$("start-ollama").addEventListener("click", async () => {
+  const button = $("start-ollama");
+  button.disabled = true;
+  button.textContent = "Starting…";
+  try {
+    const result = await window.study.startOllama();
+    toast(result.ok ? "Ollama is running" : result.error, result.ok ? 3000 : 8000);
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+  button.disabled = false;
+  button.textContent = "Start Ollama";
+  renderSettings();
+});
+
 $("fix-memory").addEventListener("click", async () => {
   $("fix-memory").disabled = true;
   try {
     const result = await window.study.ollamaMemory("set");
     if (!result.ok) throw new Error(result.error || "couldn't apply the settings");
-    toast(result.restarted ? "Applied — Ollama restarted" : "Applied — restart Ollama to use them", 6000);
+    toast(result.restarted ? "Applied — Ollama restarted" : result.error, result.restarted ? 3000 : 8000);
   } catch (err) {
     toast(err.message, 8000);
   }

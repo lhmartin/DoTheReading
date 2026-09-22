@@ -25,6 +25,7 @@ import random
 import shutil
 import subprocess
 import sys
+import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -307,8 +308,14 @@ def cmd_pull_model(args) -> dict:
     """Pull a model, streaming Ollama's progress as {"log": ...} lines."""
     import requests
 
+    if not ollama_is_up():
+        return {"ok": False, "error": OLLAMA_NOT_RUNNING}
     seen = None
-    with requests.post(f"{OLLAMA_HOST}/api/pull", json={"model": args.model}, stream=True, timeout=None) as response:
+    try:
+        response_context = requests.post(f"{OLLAMA_HOST}/api/pull", json={"model": args.model}, stream=True, timeout=None)
+    except requests.exceptions.RequestException as e:
+        return {"ok": False, "error": ollama_message(e)}
+    with response_context as response:
         response.raise_for_status()
         for line in response.iter_lines():
             if not line:
@@ -356,19 +363,69 @@ def memory_settings_state(read=None) -> dict:
     return {"supported": True, "ok": ok, "values": values, "wanted": OLLAMA_MEMORY_ENV}
 
 
+OLLAMA_NOT_RUNNING = "Ollama isn't running. Start it from the Start menu (or the button in Settings), then try again."
+
+
+def ollama_message(error: Exception) -> str:
+    """Ollama's failures in words rather than stack traces."""
+    import requests
+
+    if isinstance(error, requests.exceptions.ConnectionError):
+        return OLLAMA_NOT_RUNNING
+    if isinstance(error, requests.exceptions.Timeout):
+        return "Ollama stopped responding. Check it's still running, then try again."
+    return f"Ollama error: {error}"
+
+
+def ollama_is_up(timeout: float = 2.0) -> bool:
+    try:
+        ollama_get("/api/version", timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
+def ollama_paths() -> list[list[str]]:
+    """Ways to launch Ollama, best first: the tray app keeps the server alive
+    the way a normal install does."""
+    candidates = []
+    for root in (os.environ.get("LOCALAPPDATA", ""), os.environ.get("ProgramFiles", "")):
+        if root:
+            candidates.append([str(Path(root) / "Programs" / "Ollama" / "ollama app.exe")])
+            candidates.append([str(Path(root) / "Ollama" / "ollama app.exe")])
+    found = shutil.which("ollama")
+    if found:
+        candidates.append([found, "serve"])
+    return [c for c in candidates if c[0].endswith("serve") or Path(c[0]).is_file()]
+
+
+def start_ollama(wait_seconds: int = 30) -> bool:
+    """Launch Ollama and wait until it answers. True if it's up."""
+    if ollama_is_up():
+        return True
+    for command in ollama_paths():
+        try:
+            subprocess.Popen(command, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except OSError:
+            continue
+        for _ in range(wait_seconds):
+            time.sleep(1)
+            if ollama_is_up():
+                return True
+    return False
+
+
 def restart_ollama() -> bool:
     """Stop Ollama and start it again so it picks up new settings."""
-    subprocess.run(["taskkill", "/f", "/im", "ollama app.exe"], capture_output=True)
-    subprocess.run(["taskkill", "/f", "/im", "ollama.exe"], capture_output=True)
-    app = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama app.exe"
-    try:
-        if app.is_file():
-            subprocess.Popen([str(app)])
-        else:
-            subprocess.Popen(["ollama", "serve"], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        return True
-    except OSError:
-        return False
+    for image in ("ollama app.exe", "ollama.exe"):
+        subprocess.run(["taskkill", "/f", "/im", image], capture_output=True)
+    time.sleep(2)
+    return start_ollama()
+
+
+def cmd_start_ollama(args) -> dict:
+    started = start_ollama()
+    return {"ok": started, "error": "" if started else "Couldn't start Ollama — launch it from the Start menu."}
 
 
 def cmd_ollama_memory(args) -> dict:
@@ -384,7 +441,9 @@ def cmd_ollama_memory(args) -> dict:
             winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
             os.environ[name] = value
     restarted = restart_ollama()
-    return {"ok": True, "restarted": restarted, "state": memory_settings_state()}
+    return {"ok": True, "restarted": restarted, "running": ollama_is_up(),
+            "error": "" if restarted else "Settings saved, but Ollama didn't come back up — start it from Settings.",
+            "state": memory_settings_state()}
 
 
 # ---- the nightly scheduled task (Windows) --------------------------------
@@ -456,6 +515,8 @@ def main():
     pull = sub.add_parser("pull-model")
     pull.add_argument("--model", required=True)
 
+    sub.add_parser("start-ollama")
+
     memory = sub.add_parser("ollama-memory")
     memory.add_argument("--action", required=True, choices=["check", "set"])
 
@@ -468,7 +529,8 @@ def main():
                 "process-inbox": cmd_process_inbox, "settings": cmd_settings,
                 "save-settings": cmd_save_settings, "environment": cmd_environment,
                 "pull-model": cmd_pull_model, "schedule": cmd_schedule,
-                "add-papers": cmd_add_papers, "ollama-memory": cmd_ollama_memory}
+                "add-papers": cmd_add_papers, "ollama-memory": cmd_ollama_memory,
+                "start-ollama": cmd_start_ollama}
     try:
         result = commands[args.command](args)
     except Exception as e:
