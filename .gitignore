@@ -228,3 +228,6 @@ app/node_modules/
 # ...but the app icon lives in app/build and must be committed
 !app/build/
 !app/build/**
+
+# ...but this PyInstaller spec is ours and must be committed
+!pipeline.spec
