@@ -1,0 +1,3 @@
+pdfplumber>=0.10  # renders pages via pypdfium2 for OCR, so no Poppler needed
+requests
+pytesseract
