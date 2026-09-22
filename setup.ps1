@@ -128,35 +128,16 @@ if (-not (Have ollama)) {
     if (-not (Have ollama)) { throw "Ollama not found after install. Open a new terminal and re-run this script." }
 }
 
-# These let the 32B model and its context cache fit in 16GB of VRAM. Without
-# them the KV cache is twice the size and part of the model runs on the CPU
-# (~3x slower). Ollama reads them at startup, so a running server is
-# restarted when they change.
+# The 32B model and its context cache only fit in 16GB of VRAM with flash
+# attention and an 8-bit KV cache. study_api.py owns this so the app's
+# Settings tab and this script can't drift apart.
 function Set-OllamaMemorySettings {
-    $wanted = @{ OLLAMA_FLASH_ATTENTION = "1"; OLLAMA_KV_CACHE_TYPE = "q8_0" }
-    $changed = $false
-    foreach ($name in $wanted.Keys) {
-        if ([Environment]::GetEnvironmentVariable($name, "User") -ne $wanted[$name]) {
-            [Environment]::SetEnvironmentVariable($name, $wanted[$name], "User")
-            $changed = $true
-        }
-        Set-Item "env:$name" $wanted[$name]
-    }
-    if (-not $changed) {
-        Info "Memory settings already set."
-        return
-    }
-    Info "Set OLLAMA_FLASH_ATTENTION=1 and OLLAMA_KV_CACHE_TYPE=q8_0."
-    $running = Get-Process -Name "ollama", "ollama app" -ErrorAction SilentlyContinue
-    if (-not $running) { return }
-    Info "Restarting Ollama so they take effect..."
-    try {
-        $running | Stop-Process -Force -ErrorAction Stop
-        Start-Sleep -Seconds 3
-        $app = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama app.exe"
-        if (Test-Path $app) { Start-Process $app } else { Start-Process ollama -ArgumentList "serve" -WindowStyle Hidden }
-    } catch {
-        Warn "Couldn't restart Ollama automatically. Restart it (or reboot) before the next run."
+    $result = Invoke-Native { & $VenvPython (Join-Path $RepoDir "study_api.py") ollama-memory --action set } | ConvertFrom-Json
+    if ($result.ok) {
+        Info $(if ($result.state.ok) { "Flash attention and 8-bit KV cache set." } else { "Couldn't confirm the settings." })
+        if (-not $result.restarted) { Warn "Restart Ollama (or reboot) so it picks them up." }
+    } else {
+        Warn "Couldn't set Ollama's memory settings: $($result.error)"
     }
 }
 

@@ -361,6 +361,7 @@ function renderModelPicker(models) {
 // One line under the dropdown, saying what this choice costs you.
 function describeSelectedModel() {
   const name = $("model-select").value;
+  if (!state.pullActivity) $("pull-activity").hidden = true;
   const model = (state.modelRows || []).find((m) => m.name === name);
   $("model-download").hidden = !(model && !model.installed);
   const detail = $("model-detail");
@@ -386,12 +387,19 @@ async function renderSettings() {
       : `Model not downloaded: ${models.selected} — pick one below`],
     [tesseract, tesseract ? "Tesseract found (scanned PDFs can be OCR'd)" : "No Tesseract — scanned PDFs will be skipped"],
   ];
+  const memory = env.memory_settings || { supported: false, ok: true };
+  if (memory.supported) {
+    checks.push([memory.ok, memory.ok
+      ? "Ollama is set up to keep the model on the GPU"
+      : "Ollama is missing its speed settings — the model will partly run on the CPU (~3x slower)"]);
+  }
   if (task.supported) {
     checks.push([task.registered, task.registered ? "Nightly run is scheduled" : "No nightly run scheduled"]);
   }
   $("checks").innerHTML = checks
     .map(([ok, text]) => `<li class="${ok ? "is-ok" : "is-warn"}">${escapeHtml(text)}</li>`)
     .join("");
+  $("memory-row").hidden = !(memory.supported && !memory.ok);
   const blocking = !ollama.running || !models.selected_installed;
   $("settings-pip").hidden = !blocking;
 
@@ -425,15 +433,32 @@ async function saveSettings() {
 }
 
 async function pullModel(name) {
-  const log = $("pull-log");
-  log.hidden = false;
-  log.textContent = `Downloading ${name}…\n`;
+  const button = $("model-download");
+  const select = $("model-select");
+  button.disabled = true;
+  select.disabled = true;
+  button.textContent = "Downloading…";
+
+  state.pullActivity = activity("pull");
+  state.pullActivity.start(`Downloading ${name}`);
+  // Ollama stays quiet for a few seconds while it fetches the manifest, so
+  // say something straight away rather than showing an empty box.
+  state.pullActivity.update({ sub: "contacting Ollama…" });
+  $("pull-activity").scrollIntoView({ behavior: "smooth", block: "nearest" });
+
   try {
-    await window.study.pullModel(name);
+    const result = await window.study.pullModel(name);
+    if (result && result.ok === false) throw new Error(result.error || "the download failed");
+    state.pullActivity.finish(`${name} is ready`);
     toast(`${name} downloaded`);
   } catch (err) {
+    state.pullActivity.finish("Download failed", err.message);
     toast(err.message, 8000);
   }
+  state.pullActivity = null;
+  button.disabled = false;
+  select.disabled = false;
+  button.textContent = "Download";
   renderSettings();
 }
 
@@ -661,6 +686,19 @@ $("finish").addEventListener("click", () => {
 $("save-settings").addEventListener("click", saveSettings);
 $("model-select").addEventListener("change", describeSelectedModel);
 $("model-download").addEventListener("click", () => pullModel($("model-select").value));
+$("fix-memory").addEventListener("click", async () => {
+  $("fix-memory").disabled = true;
+  try {
+    const result = await window.study.ollamaMemory("set");
+    if (!result.ok) throw new Error(result.error || "couldn't apply the settings");
+    toast(result.restarted ? "Applied — Ollama restarted" : "Applied — restart Ollama to use them", 6000);
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+  $("fix-memory").disabled = false;
+  renderSettings();
+});
+
 $("schedule-add").addEventListener("click", () => setSchedule("add"));
 $("schedule-remove").addEventListener("click", () => setSchedule("remove"));
 window.study.onPullLog((line) => {

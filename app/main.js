@@ -74,6 +74,13 @@ function runSelfTest(win, resultFile) {
   const timer = setTimeout(() => finish({ ok: false, error: "timed out after 90s" }), 90_000);
   win.webContents.once("did-finish-load", async () => {
     try {
+      // Every $("id") in the renderer must resolve: removing an element while
+      // leaving a lookup behind throws at click time, not at load.
+      const missingIds = await win.webContents.executeJavaScript(`(async () => {
+        const source = await (await fetch("app.js")).text();
+        const ids = [...source.matchAll(/\\$\\("([A-Za-z0-9_-]+)"\\)/g)].map((m) => m[1]);
+        return [...new Set(ids)].filter((id) => !document.getElementById(id));
+      })()`);
       const environment = await win.webContents.executeJavaScript("window.study.environment()");
       // The hidden attribute is easy to break with a stray display rule, and
       // an overlay stuck on top makes the app unusable.
@@ -82,8 +89,11 @@ function runSelfTest(win, resultFile) {
       );
       clearTimeout(timer);
       finish({
-        ok: Boolean(environment && environment.settings && environment.settings.model) && overlayHidden,
+        ok: Boolean(environment && environment.settings && environment.settings.model)
+          && overlayHidden
+          && missingIds.length === 0,
         overlayHidden,
+        missingIds,
         packaged: app.isPackaged,
         model: environment?.settings?.model,
         ollamaRunning: environment?.ollama?.running,
@@ -164,6 +174,8 @@ ipcMain.handle("environment", () => callApi(["environment"]));
 ipcMain.handle("pull-model", (event, model) =>
   callApi(["pull-model", "--model", model], (line) => event.sender.send("pull-log", line)),
 );
+
+ipcMain.handle("ollama-memory", (_event, action) => callApi(["ollama-memory", "--action", action]));
 
 ipcMain.handle("schedule", (_event, { action, time }) =>
   callApi(["schedule", "--action", action, ...(time ? ["--time", time] : [])]),

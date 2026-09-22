@@ -296,6 +296,7 @@ def cmd_environment(args) -> dict:
             "selected_installed": any(m["name"] == current["model"] for m in installed),
         },
         "tesseract": tesseract,
+        "memory_settings": memory_settings_state(),
         "scheduled_task": scheduled_task_state(),
         "settings": current,
         "base": str(settings.base_dir()),
@@ -324,6 +325,66 @@ def cmd_pull_model(args) -> dict:
                 seen = status
                 print(json.dumps({"log": status}), flush=True)
     return {"ok": True, "model": args.model}
+
+
+# ---- Ollama memory settings (Windows) ------------------------------------
+# Without these the KV cache is twice the size, the 32B model spills onto the
+# CPU and runs ~3x slower. Ollama reads them at startup. setup.ps1 calls this
+# too, so there's one implementation.
+
+OLLAMA_MEMORY_ENV = {"OLLAMA_FLASH_ATTENTION": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"}
+
+
+def read_user_env(name: str) -> str | None:
+    """A user-scope environment variable as Windows has it stored (which is
+    what Ollama will see next time it starts), or None."""
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            return str(winreg.QueryValueEx(key, name)[0])
+    except (FileNotFoundError, OSError):
+        return None
+
+
+def memory_settings_state(read=None) -> dict:
+    if platform.system() != "Windows":
+        return {"supported": False, "ok": True, "values": {}}
+    read = read or read_user_env
+    values = {name: read(name) for name in OLLAMA_MEMORY_ENV}
+    ok = all(values[name] == wanted for name, wanted in OLLAMA_MEMORY_ENV.items())
+    return {"supported": True, "ok": ok, "values": values, "wanted": OLLAMA_MEMORY_ENV}
+
+
+def restart_ollama() -> bool:
+    """Stop Ollama and start it again so it picks up new settings."""
+    subprocess.run(["taskkill", "/f", "/im", "ollama app.exe"], capture_output=True)
+    subprocess.run(["taskkill", "/f", "/im", "ollama.exe"], capture_output=True)
+    app = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama app.exe"
+    try:
+        if app.is_file():
+            subprocess.Popen([str(app)])
+        else:
+            subprocess.Popen(["ollama", "serve"], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return True
+    except OSError:
+        return False
+
+
+def cmd_ollama_memory(args) -> dict:
+    if platform.system() != "Windows":
+        return {"ok": False, "error": "Windows only.", "state": memory_settings_state()}
+    if args.action == "check":
+        return {"ok": True, "state": memory_settings_state()}
+
+    import winreg
+
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as key:
+        for name, value in OLLAMA_MEMORY_ENV.items():
+            winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
+            os.environ[name] = value
+    restarted = restart_ollama()
+    return {"ok": True, "restarted": restarted, "state": memory_settings_state()}
 
 
 # ---- the nightly scheduled task (Windows) --------------------------------
@@ -395,6 +456,9 @@ def main():
     pull = sub.add_parser("pull-model")
     pull.add_argument("--model", required=True)
 
+    memory = sub.add_parser("ollama-memory")
+    memory.add_argument("--action", required=True, choices=["check", "set"])
+
     schedule = sub.add_parser("schedule")
     schedule.add_argument("--action", required=True, choices=["add", "remove"])
     schedule.add_argument("--time", default="02:00")
@@ -404,7 +468,7 @@ def main():
                 "process-inbox": cmd_process_inbox, "settings": cmd_settings,
                 "save-settings": cmd_save_settings, "environment": cmd_environment,
                 "pull-model": cmd_pull_model, "schedule": cmd_schedule,
-                "add-papers": cmd_add_papers}
+                "add-papers": cmd_add_papers, "ollama-memory": cmd_ollama_memory}
     try:
         result = commands[args.command](args)
     except Exception as e:

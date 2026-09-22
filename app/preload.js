@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("study", {
   environment: () => ipcRenderer.invoke("environment"),
   pullModel: (model) => ipcRenderer.invoke("pull-model", model),
   schedule: (payload) => ipcRenderer.invoke("schedule", payload),
+  ollamaMemory: (action) => ipcRenderer.invoke("ollama-memory", action),
   onPullLog: (callback) => ipcRenderer.on("pull-log", (_event, line) => callback(line)),
   openExternal: (target) => ipcRenderer.invoke("open-external", target),
   onProcessLog: (callback) => ipcRenderer.on("process-log", (_event, line) => callback(line)),

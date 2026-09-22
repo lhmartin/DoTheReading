@@ -47,3 +47,24 @@ def test_guidance_reaches_the_prompt():
     assert "I'm a wet-lab biologist." in prompt
     assert prompt.index("I'm a wet-lab biologist.") < prompt.index("Include a mix of")
     assert "What this reader wants" not in build_prompt("TEXT", 5, "the full text", guidance="   ")
+
+
+def test_memory_settings_state_off_windows(monkeypatch):
+    import study_api
+
+    monkeypatch.setattr(study_api.platform, "system", lambda: "Linux")
+    assert study_api.memory_settings_state() == {"supported": False, "ok": True, "values": {}}
+
+
+@pytest.mark.parametrize("stored, ok", [
+    ({"OLLAMA_FLASH_ATTENTION": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"}, True),
+    ({"OLLAMA_FLASH_ATTENTION": "1", "OLLAMA_KV_CACHE_TYPE": None}, False),
+    ({"OLLAMA_FLASH_ATTENTION": None, "OLLAMA_KV_CACHE_TYPE": None}, False),
+    ({"OLLAMA_FLASH_ATTENTION": "0", "OLLAMA_KV_CACHE_TYPE": "q8_0"}, False),
+])
+def test_memory_settings_state_reads_stored_values(monkeypatch, stored, ok):
+    import study_api
+
+    monkeypatch.setattr(study_api.platform, "system", lambda: "Windows")
+    state = study_api.memory_settings_state(read=stored.get)
+    assert state["ok"] is ok and state["supported"] is True
