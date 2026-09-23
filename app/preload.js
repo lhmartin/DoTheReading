@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("study", {
   schedule: (payload) => ipcRenderer.invoke("schedule", payload),
   ollamaMemory: (action) => ipcRenderer.invoke("ollama-memory", action),
   startOllama: () => ipcRenderer.invoke("start-ollama"),
+  paperInfo: (paper) => ipcRenderer.invoke("paper-info", paper),
   onPullLog: (callback) => ipcRenderer.on("pull-log", (_event, line) => callback(line)),
   openExternal: (target) => ipcRenderer.invoke("open-external", target),
   onProcessLog: (callback) => ipcRenderer.on("process-log", (_event, line) => callback(line)),

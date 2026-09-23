@@ -175,6 +175,8 @@ ipcMain.handle("pull-model", (event, model) =>
   callApi(["pull-model", "--model", model], (line) => event.sender.send("pull-log", line)),
 );
 
+ipcMain.handle("paper-info", (_event, paper) => callApi(["paper-info", "--paper", paper]));
+
 ipcMain.handle("start-ollama", () => callApi(["start-ollama"]));
 
 ipcMain.handle("ollama-memory", (_event, action) => callApi(["ollama-memory", "--action", action]));

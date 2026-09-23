@@ -113,15 +113,65 @@ function escapeHtml(text) {
   );
 }
 
+function coverUrl(path) {
+  return `file://${path.replace(/\\/g, "/")}`;
+}
+
+function shelfCard(paper) {
+  const { total, seen, correct, review } = paper.counts;
+  const facts = [
+    paper.pages ? `${paper.pages} pages` : "",
+    `${plural(total, "question")}`,
+    seen ? `${correct}/${seen} right` : "not studied yet",
+    review ? `${review} to review` : "",
+  ].filter(Boolean);
+  const added = new Date(paper.added).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return `
+    <article class="shelf-card" data-stem="${paper.stem}">
+      <div class="cover" data-cover-for="${paper.stem}">
+        ${paper.cover ? `<img src="${coverUrl(paper.cover)}" alt="" />` : `<span class="cover-placeholder">PDF</span>`}
+      </div>
+      <div class="shelf-body">
+        <h3>${escapeHtml(paper.title)}</h3>
+        <p class="shelf-facts">${facts.join(" · ")}</p>
+        <p class="shelf-added">Added ${added}</p>
+        <div class="row" style="margin-top:auto">
+          <button class="btn btn--primary" data-study="${paper.stem}">Study</button>
+          <button class="btn btn--ghost" data-peek="${paper.stem}">Questions</button>
+        </div>
+      </div>
+    </article>`;
+}
+
 function renderLibrary() {
   const { papers } = state.data;
   $("library-list").innerHTML = papers.length
-    ? papers.map((p) => paperRow(p)).join("")
-    : `<p class="meta">No processed papers yet.</p>`;
+    ? papers.map(shelfCard).join("")
+    : `<p class="meta">No processed papers yet. Drag a PDF onto the window to get started.</p>`;
+  loadMissingCovers(papers);
+}
+
+// Covers are rendered on demand, one at a time, so a big library doesn't
+// stall the view while PDFs are rasterised.
+async function loadMissingCovers(papers) {
+  for (const paper of papers) {
+    if (paper.cover || !paper.pdf) continue;
+    try {
+      const { info } = await window.study.paperInfo(paper.stem);
+      paper.cover = info.cover;
+      paper.pages = info.pages;
+      const slot = document.querySelector(`[data-cover-for="${paper.stem}"]`);
+      if (slot && info.cover) slot.innerHTML = `<img src="${coverUrl(info.cover)}" alt="" />`;
+      const card = document.querySelector(`.shelf-card[data-stem="${paper.stem}"] .shelf-facts`);
+      if (card && info.pages) card.textContent = card.textContent.replace(/^/, `${info.pages} pages · `);
+    } catch {
+      // a cover is a nicety; a failure here shouldn't disturb the library
+    }
+  }
 }
 
 function togglePeek(stem) {
-  const row = document.querySelector(`.paper-row[data-stem="${stem}"]`);
+  const row = document.querySelector(`.shelf-card[data-stem="${stem}"], .paper-row[data-stem="${stem}"]`);
   const existing = row.querySelector(".questions-peek");
   if (existing) return existing.remove();
   const paper = paperByStem(stem);
@@ -558,9 +608,10 @@ function renderQuestion() {
     $("e-page").textContent = q.page || "";
   }
 
+  // The answer box is always there — writing it down is the point. The
+  // checkbox only decides whether the model marks it or you do.
   const ai = $("ai-toggle").checked;
   $("answer-stage").hidden = false;
-  $("typed-field").hidden = !ai;
   $("typed").value = "";
   $("reveal").hidden = ai;
   $("check").hidden = !ai;
@@ -668,6 +719,12 @@ document.addEventListener("click", (event) => {
   if (study) return startPaper(study.dataset.study);
   const peek = event.target.closest("[data-peek]");
   if (peek) return togglePeek(peek.dataset.peek);
+});
+
+$("ai-toggle").addEventListener("change", () => {
+  const ai = $("ai-toggle").checked;
+  $("reveal").hidden = ai;
+  $("check").hidden = !ai;
 });
 
 $("reveal").addEventListener("click", revealAnswer);

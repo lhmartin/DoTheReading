@@ -25,6 +25,8 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 # Ollama silently drops the start of prompts that don't fit.
 NUM_CTX = 8192
 MAX_JSON_ATTEMPTS = 2  # per model call, before giving up on a malformed reply
+MAX_REPLY_TOKENS = 2000  # ceiling per reply; generous for the JSON we ask for
+KEEP_ALIVE = "30m"       # how long Ollama keeps the model loaded between calls
 CHUNK_SIZE = 12000    # chars; ~3,000 tokens per chunk
 CHUNK_OVERLAP = 1500  # chars from the end of each chunk repeated at the start of the next
 OCR_MIN_CHARS = 25    # pages with fewer non-whitespace chars than this get OCR'd
@@ -227,10 +229,13 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 
 # ---- Ollama -------------------------------------------------------------
 
-def call_ollama(prompt: str, model: str, fmt=None) -> str:
+def call_ollama(prompt: str, model: str, fmt=None, max_tokens: int = MAX_REPLY_TOKENS) -> str:
     """Send a prompt to Ollama. `fmt` is passed as Ollama's `format` field
     (a JSON schema here) to constrain the output."""
-    payload = {"model": model, "prompt": prompt, "stream": False, "options": {"num_ctx": NUM_CTX}}
+    # keep_alive: a paper is dozens of calls; without this Ollama unloads the
+    # model between them and reloads ~14GB each time.
+    payload = {"model": model, "prompt": prompt, "stream": False, "keep_alive": KEEP_ALIVE,
+               "options": {"num_ctx": NUM_CTX, "num_predict": max_tokens}}
     if fmt is not None:
         payload["format"] = fmt
     try:
@@ -248,8 +253,12 @@ def call_ollama(prompt: str, model: str, fmt=None) -> str:
         if resp.status_code == 404:
             sys.exit(f"Ollama doesn't have the model '{model}'. Download it in the app's Settings, "
                      f"or run: ollama pull {model}")
-        if "llama-server" in detail or "GGML_ASSERT" in detail:
-            # Ollama's own model server died; nothing here can retry around it.
+        # Two different Ollama-side failures that both mention llama-server:
+        if "timed out waiting for llama-server" in detail:
+            sys.exit("Ollama took too long to load the model (its 5 minute limit). That usually means it's "
+                     "reading the model from a slow disk, or the machine is short of memory. Try again — "
+                     "a second attempt is usually faster — or choose a smaller model in Settings.")
+        if "GGML_ASSERT" in detail or "process has terminated" in detail:
             sys.exit("Ollama's model server crashed while running the model. Try turning off the speed "
                      "settings in Settings and running again; if it keeps happening, re-download the "
                      "model or update Ollama.")
@@ -409,15 +418,16 @@ def build_prompt(text_chunk: str, num_questions: int, section_label: str, overla
         - critical questions (limitations, assumptions, or open problems that
           the text itself states or directly implies; not generic criticism)
 
-        Every answer must be supported by the text. For each question, copy
-        into "evidence" one sentence from the text, word for word, that
-        supports the answer. Prefer questions about central ideas over
+        Keep answers to at most two sentences — they are for recall, not
+        summaries. Every answer must be supported by the text. For each
+        question, copy into "evidence" one sentence from the text, word for
+        word, that supports the answer. Prefer questions about central ideas over
         incidental details such as default hyperparameters.
 
         Respond with JSON only, in this shape:
         {"questions": [{"type": "comprehension" | "methodology" | "critical",
                         "question": "<question>",
-                        "answer": "<brief answer>",
+                        "answer": "<answer in at most two sentences>",
                         "evidence": "<exact sentence copied from the text>"}]}
 
         TEXT:
@@ -455,51 +465,79 @@ def build_rank_prompt(candidates: list[dict], num_questions: int) -> str:
 BLIND_ANSWER_SCHEMA = {
     "type": "object",
     "properties": {
-        "answerable": {"type": "boolean"},
-        "answer": {"type": "string"},
-        "quote": {"type": "string"},
+        "answers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "answerable": {"type": "boolean"},
+                    "answer": {"type": "string"},
+                    "quote": {"type": "string"},
+                },
+                "required": ["id", "answerable", "answer", "quote"],
+            },
+        }
     },
-    "required": ["answerable", "answer", "quote"],
+    "required": ["answers"],
 }
 
 
-def build_blind_answer_prompt(text_chunk: str, question: str) -> str:
-    return "TEXT:\n" + text_chunk + "\n\n" + textwrap.dedent(f"""\
-        Answer the question below using ONLY the text above. Copy into
-        "quote" the single sentence from the text, word for word, that best
-        supports your answer. If the text doesn't answer the question, set
-        "answerable" to false.
+def build_blind_answer_prompt(text_chunk: str, questions: list[str]) -> str:
+    """Answer every question drawn from this section in one call: the section
+    is the expensive part of the prompt, so it's sent once, not per question."""
+    listing = "\n".join(f"[{i}] {q}" for i, q in enumerate(questions))
+    return "TEXT:\n" + text_chunk + "\n\n" + textwrap.dedent("""\
+        Answer each question below using ONLY the text above, in at most two
+        sentences each. For each one copy into "quote" the single sentence
+        from the text, word for word, that best supports your answer. If the
+        text doesn't answer a question, set "answerable" to false.
 
-        QUESTION: {question}
+        Answer every question, keeping its id.
 
         Respond with JSON only:
-        {{"answerable": true | false, "answer": "<brief answer>", "quote": "<exact sentence from the text>"}}
-    """)
+        {"answers": [{"id": <id>, "answerable": true | false,
+                      "answer": "<answer in at most two sentences>",
+                      "quote": "<exact sentence from the text>"}]}
+
+        QUESTIONS:
+    """) + listing + "\n"
 
 
 JUDGE_SCHEMA = {
     "type": "object",
     "properties": {
-        "premise_ok": {"type": "boolean"},
-        "a_supported": {"type": "boolean"},
-        "verdict": {"type": "string", "enum": ["agree", "partial", "disagree"]},
-        "reason": {"type": "string"},
+        "judgements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "premise_ok": {"type": "boolean"},
+                    "a_supported": {"type": "boolean"},
+                    "verdict": {"type": "string", "enum": ["agree", "partial", "disagree"]},
+                    "reason": {"type": "string"},
+                },
+                "required": ["id", "premise_ok", "a_supported", "verdict", "reason"],
+            },
+        }
     },
-    "required": ["premise_ok", "a_supported", "verdict", "reason"],
+    "required": ["judgements"],
 }
 
 
-def build_judge_prompt(text_chunk: str, question: str, answer_a: str, answer_b: str) -> str:
+def build_judge_prompt(text_chunk: str, items: list[dict]) -> str:
+    """Judge every answered question from this section in one call."""
+    listing = "\n\n".join(
+        f"[{item['id']}] QUESTION: {item['question']}\n    ANSWER A: {item['answer_a']}\n    ANSWER B: {item['answer_b']}"
+        for item in items
+    )
     # Agreement alone isn't enough: a question with a false premise can lead
     # both answers into the same mistake. So the judge also checks the
     # premise and answer A against the text directly.
-    return "TEXT:\n" + text_chunk + "\n\n" + textwrap.dedent(f"""\
-        Two answers were written independently to the same question about
-        the text above. Check them carefully against the text.
-
-        QUESTION: {question}
-        ANSWER A: {answer_a}
-        ANSWER B: {answer_b}
+    return "TEXT:\n" + text_chunk + "\n\n" + textwrap.dedent("""\
+        For each item below, two answers were written independently to the
+        same question about the text above. Check them against the text.
 
         - premise_ok: false if the question assumes something the text does
           not say or contradicts (e.g. asks for a limitation the text never
@@ -509,11 +547,16 @@ def build_judge_prompt(text_chunk: str, question: str, answer_a: str, answer_b: 
         - verdict: "agree" if A and B make the same core claim; "partial" if
           compatible but one is missing something important; "disagree" if
           they contradict each other or make different claims.
+        - reason: one short sentence.
+
+        Judge every item, keeping its id.
 
         Respond with JSON only:
-        {{"premise_ok": true | false, "a_supported": true | false,
-          "verdict": "agree" | "partial" | "disagree", "reason": "<one sentence>"}}
-    """)
+        {"judgements": [{"id": <id>, "premise_ok": true | false, "a_supported": true | false,
+                         "verdict": "agree" | "partial" | "disagree", "reason": "<one sentence>"}]}
+
+        ITEMS:
+    """) + listing + "\n"
 
 
 TITLE_SCHEMA = {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}
@@ -521,36 +564,65 @@ TITLE_SCHEMA = {"type": "object", "properties": {"title": {"type": "string"}}, "
 
 # ---- Pipeline -------------------------------------------------------------
 
+def verify_questions(questions: list[dict], text_chunk: str, model: str, log=print) -> list[bool]:
+    """Check a section's questions together: answer them blind from the text,
+    confirm a real supporting quote exists, then judge each against the
+    original answer. One pair of calls per section rather than per question.
+
+    Sets q["evidence"] to the verified quote on the ones that pass.
+    """
+    blind = ask_json(build_blind_answer_prompt(text_chunk, [q["question"] for q in questions]),
+                     model, BLIND_ANSWER_SCHEMA, log)
+    by_id = {a.get("id"): a for a in blind.get("answers", []) if isinstance(a, dict)}
+
+    passed = [True] * len(questions)
+    judge_items = []
+    for i, q in enumerate(questions):
+        answer = by_id.get(i)
+        if not answer:
+            passed[i], q["verification"] = False, "the model skipped this question"
+            continue
+        if not answer.get("answerable", True) or not str(answer.get("answer", "")).strip():
+            passed[i], q["verification"] = False, "not answerable from the text"
+            continue
+        evidence_ok = quote_in_text(q.get("evidence", ""), text_chunk)
+        blind_quote = str(answer.get("quote", "")).strip()
+        if not (evidence_ok or quote_in_text(blind_quote, text_chunk)):
+            passed[i], q["verification"] = False, "no quote found in the text"
+            continue
+        q["_verified_quote"] = q["evidence"] if evidence_ok else blind_quote
+        judge_items.append({"id": i, "question": q["question"],
+                            "answer_a": q["answer"], "answer_b": str(answer["answer"])})
+
+    if not judge_items:
+        return passed
+
+    judged = ask_json(build_judge_prompt(text_chunk, judge_items), model, JUDGE_SCHEMA, log)
+    verdicts = {j.get("id"): j for j in judged.get("judgements", []) if isinstance(j, dict)}
+    for item in judge_items:
+        i = item["id"]
+        q = questions[i]
+        verdict = verdicts.get(i)
+        if not verdict:
+            passed[i], q["verification"] = False, "the model skipped judging this question"
+            continue
+        q["verification"] = f"{verdict.get('verdict')}: {verdict.get('reason', '')}"
+        if verdict.get("premise_ok") is False:
+            passed[i], q["verification"] = False, "false premise: " + q["verification"]
+        elif verdict.get("a_supported") is False:
+            passed[i], q["verification"] = False, "answer not supported: " + q["verification"]
+        elif verdict.get("verdict") not in ("agree", "partial"):
+            passed[i] = False
+        else:
+            q["evidence"] = clean_quote(q.pop("_verified_quote"))
+    for q in questions:
+        q.pop("_verified_quote", None)
+    return passed
+
+
 def verify_question(q: dict, text_chunk: str, model: str, log=print) -> bool:
-    """Re-answer the question blind from its source section and keep it only
-    if the answers agree and a verbatim supporting quote exists. On success,
-    sets q["evidence"] to the verified quote."""
-    evidence_ok = quote_in_text(q.get("evidence", ""), text_chunk)
-
-    blind = ask_json(build_blind_answer_prompt(text_chunk, q["question"]), model, BLIND_ANSWER_SCHEMA, log)
-    if not blind.get("answerable", True) or not str(blind.get("answer", "")).strip():
-        q["verification"] = "not answerable from the text"
-        return False
-    blind_quote = str(blind.get("quote", "")).strip()
-    blind_quote_ok = quote_in_text(blind_quote, text_chunk)
-    if not (evidence_ok or blind_quote_ok):
-        q["verification"] = "no quote found in the text"
-        return False
-
-    judged = ask_json(build_judge_prompt(text_chunk, q["question"], q["answer"], str(blind["answer"])),
-                      model, JUDGE_SCHEMA, log)
-    verdict = judged.get("verdict")
-    q["verification"] = f"{verdict}: {judged.get('reason', '')}"
-    if judged.get("premise_ok") is False:
-        q["verification"] = "false premise: " + q["verification"]
-        return False
-    if judged.get("a_supported") is False:
-        q["verification"] = "answer not supported: " + q["verification"]
-        return False
-    if verdict not in ("agree", "partial"):
-        return False
-    q["evidence"] = clean_quote(q["evidence"] if evidence_ok else blind_quote)
-    return True
+    """One question, for callers that have only one."""
+    return verify_questions([q], text_chunk, model, log)[0]
 
 
 def rank_candidates(candidates: list[dict], num_questions: int, model: str, log=print) -> list[dict]:
@@ -568,17 +640,26 @@ def rank_candidates(candidates: list[dict], num_questions: int, model: str, log=
 
 
 def generate_questions(text: str, model: str, num_questions: int, log=print,
-                       guidance: str = "") -> tuple[list[dict], str]:
+                       guidance: str = "", checkpoint: "Checkpoint | None" = None) -> tuple[list[dict], str]:
     """Generate, rank and verify questions. Returns (questions, summary)
-    where each question dict has type, question, answer, evidence, page."""
+    where each question dict has type, question, answer, evidence, page.
+
+    Generating a section takes minutes, so each one is checkpointed: an
+    interrupted paper resumes instead of starting again.
+    """
     chunks = chunk_text(text)
     target = math.ceil(num_questions * CANDIDATE_FACTOR)
     per_chunk = max(3, math.ceil(target / len(chunks)))
 
     if len(chunks) > 1:
         log(f"    long paper — processing in {len(chunks)} sections...")
-    candidates = []
+    candidates = list(checkpoint.candidates) if checkpoint else []
+    done = checkpoint.sections_done if checkpoint else 0
+    if done:
+        log(f"    resuming after section {done}/{len(chunks)} ({len(candidates)} questions already written)")
     for i, chunk in enumerate(chunks):
+        if i < done:
+            continue
         if len(chunks) > 1:
             log(f"      section {i + 1}/{len(chunks)}...")
         label = "the full text" if len(chunks) == 1 else f"section {i + 1} of {len(chunks)}"
@@ -586,29 +667,40 @@ def generate_questions(text: str, model: str, num_questions: int, log=print,
         for q in ask_for_questions(prompt, model, log):
             q["chunk"] = i
             candidates.append(q)
+        if checkpoint:
+            checkpoint.save(i + 1, candidates)
 
     log(f"    ranking {len(candidates)} candidate questions...")
     ranked = balance_types(rank_candidates(candidates, num_questions, model, log))
 
-    # Verify in rank order, a batch at a time. Within a batch, go section by
-    # section so Ollama's prompt cache can reuse each section.
+    # Verify in rank order, a batch at a time, but send each section's
+    # questions together: the section text dominates the prompt.
     verified, checked, remaining = [], 0, list(ranked)
+    kept_evidence = set()
     while remaining and len(verified) < num_questions:
         need = num_questions - len(verified)
         batch, remaining = remaining[:need], remaining[need:]
         log(f"    verifying {len(batch)} question(s)...")
-        for q in sorted(batch, key=lambda q: q["chunk"]):
-            checked += 1
+        by_chunk = {}
+        for q in batch:
+            by_chunk.setdefault(q["chunk"], []).append(q)
+        for chunk_index, chunk_questions in sorted(by_chunk.items()):
+            checked += len(chunk_questions)
             try:
-                ok = verify_question(q, chunks[q["chunk"]], model, log)
+                results = verify_questions(chunk_questions, chunks[chunk_index], model, log)
             except ValueError as e:
-                ok, q["verification"] = False, str(e)
-            if ok and normalize_for_match(q["evidence"]) in {normalize_for_match(v["evidence"]) for v in verified}:
-                ok, q["verification"] = False, "duplicate: same evidence as a question already kept"
-            if ok:
-                verified.append(q)
-            else:
-                log(f"      dropped: {q['question'][:70]}... ({q['verification'][:80]})")
+                results = [False] * len(chunk_questions)
+                for q in chunk_questions:
+                    q["verification"] = str(e)
+            for q, ok in zip(chunk_questions, results):
+                evidence = normalize_for_match(q.get("evidence", ""))
+                if ok and evidence in kept_evidence:
+                    ok, q["verification"] = False, "duplicate: same evidence as a question already kept"
+                if ok:
+                    kept_evidence.add(evidence)
+                    verified.append(q)
+                else:
+                    log(f"      dropped: {q['question'][:70]}... ({q['verification'][:80]})")
 
     verified.sort(key=ranked.index)  # batches were verified section by section
     pages = page_index(text)

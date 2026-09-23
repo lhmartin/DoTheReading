@@ -58,8 +58,12 @@ def question(answer="23% more pairs.", evidence="The sleep group recalled 23 per
             "answer": answer, "evidence": evidence, "chunk": 0}
 
 
-def blind(answer="About 23 percent more.", quote="the wake group was tested in the evening", answerable=True):
-    return {"answerable": answerable, "answer": answer, "quote": quote}
+def blind(answer="About 23 percent more.", quote="the wake group was tested in the evening", answerable=True, ids=(0,)):
+    return {"answers": [{"id": i, "answerable": answerable, "answer": answer, "quote": quote} for i in ids]}
+
+
+def judged(verdict="agree", reason="same", ids=(0,), **fields):
+    return {"judgements": [{"id": i, "verdict": verdict, "reason": reason, **fields} for i in ids]}
 
 
 @pytest.fixture
@@ -72,23 +76,25 @@ def fake(monkeypatch):
 
 
 def test_verify_passes_on_agreement_and_real_quote(fake):
-    model = fake(blind=[blind()], judge=[{"verdict": "agree", "reason": "same"}])
+    model = fake(blind=[blind()], judge=[judged()])
     q = question()
     assert verify_question(q, SECTION, "m", log=lambda m: None)
     assert q["evidence"] == "The sleep group recalled 23 percent more word pairs"
-    assert "How much better" not in model.prompts[0].split("QUESTION:")[0], "section text should come first"
-    assert "23% more pairs." not in model.prompts[0], "blind answer must not see the original answer"
+    prompt = model.prompts[0]
+    assert prompt.index("TEXT:") < prompt.index("QUESTIONS:") < prompt.index("How much better"), \
+        "the section text has to come first, so Ollama can reuse it across calls"
+    assert "23% more pairs." not in prompt, "blind answer must not see the original answer"
 
 
 def test_verify_fails_on_disagreement(fake):
-    fake(blind=[blind(answer="They did worse.")], judge=[{"verdict": "disagree", "reason": "opposite"}])
+    fake(blind=[blind(answer="They did worse.")], judge=[judged("disagree", "opposite")])
     q = question()
     assert not verify_question(q, SECTION, "m", log=lambda m: None)
     assert q["verification"].startswith("disagree")
 
 
 def test_verify_uses_blind_quote_when_original_evidence_is_invented(fake):
-    fake(blind=[blind()], judge=[{"verdict": "partial", "reason": "close"}])
+    fake(blind=[blind()], judge=[judged("partial", "close")])
     q = question(evidence="Sleep is known to double memory in all adults.")
     assert verify_question(q, SECTION, "m", log=lambda m: None)
     assert q["evidence"] == "the wake group was tested in the evening"
@@ -122,9 +128,11 @@ def test_generate_replaces_failed_questions_and_keeps_rank_order(fake, monkeypat
         questions=[{"questions": gen}],
         rank=[{"ranked_ids": [3, 1, 0, 2]}],
         # First batch (q3, q1): q3 fails. Second batch (q0): passes.
-        blind=[blind(), blind(), blind()],
-        judge=[{"verdict": "disagree", "reason": ""}, {"verdict": "agree", "reason": ""},
-               {"verdict": "agree", "reason": ""}],
+        # batch 1: questions 3 and 1 from the same chunk; batch 2: question 0
+        blind=[blind(ids=(0, 1)), blind(ids=(0,))],
+        judge=[{"judgements": [{"id": 0, "verdict": "disagree", "reason": ""},
+                               {"id": 1, "verdict": "agree", "reason": ""}]},
+               judged()],
     )
     questions, summary = generate_questions(SECTION, "m", num_questions=2, log=lambda m: None)
     assert [q["question"] for q in questions] == ["Question 1?", "Question 0?"]
@@ -148,8 +156,8 @@ def test_balance_types_interleaves_keeping_rank_order():
 
 def test_judge_rejects_false_premise_or_unsupported_answer(fake):
     fake(blind=[blind(), blind()],
-         judge=[{"premise_ok": False, "a_supported": True, "verdict": "agree", "reason": "loaded"},
-                {"premise_ok": True, "a_supported": False, "verdict": "partial", "reason": "made up"}])
+         judge=[judged("agree", "loaded", premise_ok=False, a_supported=True),
+                judged("partial", "made up", premise_ok=True, a_supported=False)])
     q1, q2 = question(), question()
     assert not verify_question(q1, SECTION, "m", log=lambda m: None)
     assert q1["verification"].startswith("false premise")
@@ -164,9 +172,8 @@ def test_generate_skips_questions_with_duplicate_evidence(fake, monkeypatch):
            for i in range(2)]
     gen.append({"type": "critical", "question": "Question 2?", "answer": "a2",
                 "evidence": "the wake group was tested in the evening"})
-    agree = {"verdict": "agree", "reason": ""}
     fake(questions=[{"questions": gen}], rank=[{"ranked_ids": [0, 1, 2]}],
-         blind=[blind()] * 3, judge=[agree] * 3)
+         blind=[blind(ids=(0, 1))], judge=[judged(ids=(0, 1))])
     questions, _ = generate_questions(SECTION, "m", num_questions=2, log=lambda m: None)
     assert [q["question"] for q in questions] == ["Question 0?", "Question 2?"]
 

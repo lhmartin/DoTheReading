@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import settings
+from checkpoint import Checkpoint
 from paper_qa_lib import check_model, extract_text, find_title, generate_questions
 from qa_format import render_markdown
 
@@ -80,14 +81,17 @@ def main() -> str | None:
 
             title = find_title(str(pdf_path), text, config["model"], log=log) or pdf_path.stem
             log(f"    title: {title}")
+            progress = Checkpoint(pdf_path.stem, text)
             questions, summary = generate_questions(text, config["model"], config["num_questions"],
-                                                    log=log, guidance=config["guidance"])
+                                                    log=log, guidance=config["guidance"],
+                                                    checkpoint=progress)
             if not questions:
                 log(f"  WARNING: no questions passed verification for {pdf_path.name}. Leaving it in the inbox.")
                 continue
             note = f"{pdf_path.name} · {summary}"
             questions_path.write_text(render_markdown(title, questions, note=note), encoding="utf-8")
 
+            progress.clear()
             shutil.move(str(pdf_path), str(LIBRARY_DIR / pdf_path.name))
             log(f"  Done. Questions saved, PDF moved to library.")
         except Exception:

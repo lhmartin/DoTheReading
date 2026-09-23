@@ -58,6 +58,59 @@ def base_dir(args) -> Path:
     return settings.base_dir()
 
 
+def cache_dir() -> Path:
+    """Thumbnails and page counts: derived data, so it lives in the OS cache
+    rather than cluttering ~/PaperStudy."""
+    if platform.system() == "Windows":
+        root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "DoTheReading"
+    else:
+        root = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "dothereading"
+    path = root / "cache"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def cached_info(stem: str) -> dict | None:
+    """Page count and cover image for a paper, if we've looked before."""
+    info_path = cache_dir() / f"{stem}.json"
+    if not info_path.exists():
+        return None
+    try:
+        info = json.loads(info_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    cover = cache_dir() / f"{stem}.png"
+    info["cover"] = str(cover) if cover.exists() else None
+    return info
+
+
+def build_info(stem: str, pdf_path: Path) -> dict:
+    """Render the first page as a cover image and count the pages."""
+    import pdfplumber
+
+    info = {"pages": None}
+    cover = cache_dir() / f"{stem}.png"
+    try:
+        with pdfplumber.open(str(pdf_path)) as pdf:
+            info["pages"] = len(pdf.pages)
+            image = pdf.pages[0].to_image(resolution=55).original
+            image.thumbnail((420, 560))
+            image.save(cover)
+    except Exception as e:  # a PDF that won't render shouldn't break the library
+        info["error"] = f"{type(e).__name__}: {e}"
+    (cache_dir() / f"{stem}.json").write_text(json.dumps(info), encoding="utf-8")
+    info["cover"] = str(cover) if cover.exists() else None
+    return info
+
+
+def cmd_paper_info(args) -> dict:
+    base = base_dir(args)
+    pdf_path = base / "library" / f"{args.paper}.pdf"
+    if not pdf_path.exists():
+        return {"paper": args.paper, "info": {"pages": None, "cover": None}}
+    return {"paper": args.paper, "info": cached_info(args.paper) or build_info(args.paper, pdf_path)}
+
+
 def paper_stem(md_path: Path) -> str:
     return md_path.stem.removesuffix("_questions")
 
@@ -80,10 +133,13 @@ def load_papers(base: Path, history: QuizHistory) -> list[dict]:
                 "last_seen": attempts[-1]["at"] if attempts else None,
             })
         seen = [q for q in questions if q["attempts"]]
+        info = cached_info(stem) or {}
         papers.append({
             "stem": stem,
             "title": parse_title(md_text) or stem,
             "pdf": str(pdf_path) if pdf_path.exists() else None,
+            "pages": info.get("pages"),
+            "cover": info.get("cover"),
             "added": datetime.fromtimestamp(md_path.stat().st_mtime).isoformat(timespec="seconds"),
             "questions": questions,
             "counts": {
@@ -299,6 +355,7 @@ def cmd_environment(args) -> dict:
         "tesseract": tesseract,
         "memory_settings": memory_settings_state(),
         "scheduled_task": scheduled_task_state(),
+        "power": power_state(),
         "settings": current,
         "base": str(settings.base_dir()),
     }
@@ -459,6 +516,81 @@ def cmd_ollama_memory(args) -> dict:
             "state": memory_settings_state()}
 
 
+# ---- power plan (Windows) ------------------------------------------------
+# A 02:00 task can only wake a sleeping laptop if wake timers are allowed and
+# the lid puts it to sleep rather than hibernating it. This only reports:
+# changing someone's power plan behind their back is not our business.
+
+LID_ACTIONS = {0: "stays awake", 1: "sleeps", 2: "hibernates", 3: "shuts down"}
+WAKE_TIMER_VALUES = {0: "off", 1: "on", 2: "important events only"}
+
+
+def parse_powercfg_value(output: str, on_battery: bool = False) -> int | None:
+    """Pull the AC (or DC) index out of `powercfg /q` output."""
+    wanted = "Current DC Power Setting Index:" if on_battery else "Current AC Power Setting Index:"
+    for line in output.splitlines():
+        if wanted in line:
+            try:
+                return int(line.split(":")[1].strip(), 16)
+            except ValueError:
+                return None
+    return None
+
+
+def query_power_setting(subgroup: str, setting: str) -> int | None:
+    try:
+        done = subprocess.run(["powercfg", "/q", "SCHEME_CURRENT", subgroup, setting],
+                              capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return parse_powercfg_value(done.stdout) if done.returncode == 0 else None
+
+
+def power_state() -> dict:
+    """Whether a sleeping machine would actually wake for the nightly run."""
+    if platform.system() != "Windows":
+        return {"supported": False, "ok": True, "checks": []}
+
+    wake = query_power_setting("SUB_SLEEP", "RTCWAKE")
+    lid = query_power_setting("SUB_BUTTONS", "LIDACTION")
+    hibernate_after = query_power_setting("SUB_SLEEP", "HIBERNATEIDLE")
+
+    checks = [{
+        "name": "Wake timers",
+        "value": WAKE_TIMER_VALUES.get(wake, "unknown"),
+        "ok": wake in (1, 2),
+        "detail": "The nightly task can't wake the machine without these.",
+        "fix": "powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP RTCWAKE 1",
+    }, {
+        "name": "Closing the lid",
+        "value": LID_ACTIONS.get(lid, "unknown"),
+        "ok": lid in (0, 1),
+        "detail": "A wake timer can wake a sleeping machine, but not a hibernated or shut down one.",
+        "fix": "powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1",
+    }]
+    if hibernate_after:
+        hours = hibernate_after / 3600
+        checks.append({
+            "name": "Hibernates after sleeping",
+            "value": f"{hours:.0f} h",
+            "ok": hours >= 8,
+            "detail": "If it hibernates before 02:00, the run is missed.",
+            "fix": "powercfg /change hibernate-timeout-ac 0",
+        })
+    checks.append({
+        "name": "On battery",
+        "value": "the run is skipped",
+        "ok": True,
+        "detail": "Windows doesn't start scheduled tasks on battery, so leave it plugged in.",
+        "fix": "",
+    })
+    return {"supported": True, "ok": all(c["ok"] for c in checks), "checks": checks}
+
+
+def cmd_power(args) -> dict:
+    return {"ok": True, "power": power_state()}
+
+
 # ---- the nightly scheduled task (Windows) --------------------------------
 
 def scheduled_task_state() -> dict:
@@ -529,6 +661,10 @@ def main():
     pull.add_argument("--model", required=True)
 
     sub.add_parser("start-ollama")
+    sub.add_parser("power")
+
+    info = sub.add_parser("paper-info")
+    info.add_argument("--paper", required=True)
 
     memory = sub.add_parser("ollama-memory")
     memory.add_argument("--action", required=True, choices=["check", "set", "clear"])
@@ -543,7 +679,7 @@ def main():
                 "save-settings": cmd_save_settings, "environment": cmd_environment,
                 "pull-model": cmd_pull_model, "schedule": cmd_schedule,
                 "add-papers": cmd_add_papers, "ollama-memory": cmd_ollama_memory,
-                "start-ollama": cmd_start_ollama}
+                "start-ollama": cmd_start_ollama, "power": cmd_power, "paper-info": cmd_paper_info}
     try:
         result = commands[args.command](args)
     except Exception as e:

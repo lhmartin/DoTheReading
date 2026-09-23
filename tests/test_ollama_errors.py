@@ -51,3 +51,16 @@ def test_llama_server_crash_gets_a_recovery_hint(monkeypatch):
     assert "model server crashed" in message
     assert "speed settings" in message and "re-download" in message
     assert "GGML_ASSERT" not in message
+
+
+def test_load_timeout_is_not_reported_as_a_crash(monkeypatch):
+    import paper_qa_lib
+    from tests.test_verification import FakeResponse
+
+    timeout = {"error": 'timed out waiting for llama-server to start - '}
+    monkeypatch.setattr(paper_qa_lib.requests, "post", lambda *a, **k: FakeResponse(500, timeout))
+    with pytest.raises(SystemExit) as exit_info:
+        paper_qa_lib.call_ollama("prompt", "m")
+    message = str(exit_info.value)
+    assert "took too long to load" in message
+    assert "crashed" not in message, "a slow load is not a crash"
