@@ -34,6 +34,9 @@ import settings
 from qa_format import parse_markdown, parse_title
 from quiz_history import QuizHistory, question_key
 
+INBOX_SUFFIXES = {".pdf", ".html", ".htm"}
+# Below this, a "full text" page is really just an abstract.
+MIN_FULL_TEXT = 6000
 OLLAMA_HOST = "http://localhost:11434"
 TASK_NAME = "PaperStudyNightly"
 
@@ -187,7 +190,8 @@ def cmd_library(args) -> dict:
     base = base_dir(args)
     history = QuizHistory(base / "quiz_history.json")
     papers = load_papers(base, history)
-    inbox = sorted(p.name for p in (base / "inbox").glob("*.pdf")) if (base / "inbox").is_dir() else []
+    inbox = (sorted(p.name for p in (base / "inbox").iterdir() if p.suffix.lower() in INBOX_SUFFIXES)
+             if (base / "inbox").is_dir() else [])
     review = [{"paper": e["paper"], "question": e["question"], "key": question_key(e["paper"], e["question"])}
               for e in history.review_pile()]
     return {
@@ -370,6 +374,16 @@ def add_url(base: Path, url: str, log=lambda m: None) -> dict:
     got = article.extract_article(response.text)
     if len(got["text"]) < 1000:
         return {"ok": False, "error": "Couldn't find an article on that page — try the PDF instead."}
+
+    # bioRxiv serves the abstract page when a paper has no full text; the PDF
+    # is then the only way to read the whole thing.
+    if len(got["text"]) < MIN_FULL_TEXT and sources["pdf_url"]:
+        slug = article.slug_for(url, article.title_from(got, url))
+        log("that page only has the abstract — fetching the PDF instead…")
+        if save_pdf_to_inbox(base, sources["pdf_url"], slug, log=log):
+            return {"ok": True, "title": article.title_from(got, url), "slug": slug,
+                    "characters": len(got["text"]), "pdf": True,
+                    "note": "Only the abstract is published as web text, so the PDF was queued instead."}
 
     title = article.title_from(got, url)
     slug = article.slug_for(url, title)
