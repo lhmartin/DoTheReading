@@ -296,6 +296,58 @@ def add_papers(base: Path, paths: list[str]) -> dict:
     return {"added": added, "skipped": skipped}
 
 
+USER_AGENT = "Mozilla/5.0 (compatible; DoTheReading/1.0; +https://github.com/lhmartin/DoTheReading)"
+
+
+def add_url(base: Path, url: str, log=lambda m: None) -> dict:
+    """Fetch an article, save it for processing, and keep the PDF to read
+    when the source has one (bioRxiv, arXiv)."""
+    import article
+    import requests
+
+    url = url.strip()
+    if not url.lower().startswith(("http://", "https://")):
+        return {"ok": False, "error": "That doesn't look like a web address."}
+
+    sources = article.canonical_sources(url)
+    log("fetching the page…")
+    try:
+        response = requests.get(sources["text_url"], timeout=60, headers={"User-Agent": USER_AGENT})
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        return {"ok": False, "error": f"Couldn't fetch that page: {e}"}
+
+    got = article.extract_article(response.text)
+    if len(got["text"]) < 1000:
+        return {"ok": False, "error": "Couldn't find an article on that page — try the PDF instead."}
+
+    title = article.title_from(got, url)
+    slug = article.slug_for(url, title)
+    inbox = base / "inbox"
+    inbox.mkdir(parents=True, exist_ok=True)
+    (inbox / f"{slug}.html").write_text(article.as_reader_html(title, got["text"], url), encoding="utf-8")
+
+    # The typeset PDF is nicer to read than our stripped-down page.
+    pdf_saved = False
+    if sources["pdf_url"]:
+        log("fetching the PDF…")
+        try:
+            pdf = requests.get(sources["pdf_url"], timeout=120, headers={"User-Agent": USER_AGENT})
+            if pdf.ok and pdf.content[:4] == b"%PDF":
+                library = base / "library"
+                library.mkdir(parents=True, exist_ok=True)
+                (library / f"{slug}.pdf").write_bytes(pdf.content)
+                pdf_saved = True
+        except requests.exceptions.RequestException:
+            pass  # the article text is what matters; the PDF is a bonus
+
+    return {"ok": True, "title": title, "slug": slug, "characters": len(got["text"]), "pdf": pdf_saved}
+
+
+def cmd_add_url(args) -> dict:
+    return add_url(base_dir(args), args.url, log=lambda m: print(json.dumps({"log": m}), flush=True))
+
+
 def cmd_add_papers(args) -> dict:
     return add_papers(base_dir(args), args.files)
 
@@ -654,6 +706,9 @@ def main():
     save_settings.add_argument("--num-questions", dest="num_questions")
     save_settings.add_argument("--guidance")
 
+    add_link = sub.add_parser("add-url")
+    add_link.add_argument("--url", required=True)
+
     add = sub.add_parser("add-papers")
     add.add_argument("--files", nargs="+", required=True)
 
@@ -678,7 +733,7 @@ def main():
                 "process-inbox": cmd_process_inbox, "settings": cmd_settings,
                 "save-settings": cmd_save_settings, "environment": cmd_environment,
                 "pull-model": cmd_pull_model, "schedule": cmd_schedule,
-                "add-papers": cmd_add_papers, "ollama-memory": cmd_ollama_memory,
+                "add-papers": cmd_add_papers, "add-url": cmd_add_url, "ollama-memory": cmd_ollama_memory,
                 "start-ollama": cmd_start_ollama, "power": cmd_power, "paper-info": cmd_paper_info}
     try:
         result = commands[args.command](args)

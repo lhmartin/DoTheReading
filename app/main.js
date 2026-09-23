@@ -1,6 +1,6 @@
 // Electron main process. All study data comes from study_api.py in the repo
 // root, so the app never parses question files or history itself.
-const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -174,6 +174,16 @@ ipcMain.handle("environment", () => callApi(["environment"]));
 ipcMain.handle("pull-model", (event, model) =>
   callApi(["pull-model", "--model", model], (line) => event.sender.send("pull-log", line)),
 );
+
+ipcMain.handle("add-url", (event, url) =>
+  callApi(["add-url", "--url", url], (line) => event.sender.send("add-url-log", line)),
+);
+
+// Offer what's on the clipboard, if it's a link we haven't seen.
+ipcMain.handle("clipboard-url", () => {
+  const text = (clipboard.readText() || "").trim();
+  return /^https?:\/\/\S+$/i.test(text) && text.length < 500 ? text : null;
+});
 
 ipcMain.handle("paper-info", (_event, paper) => callApi(["paper-info", "--paper", paper]));
 

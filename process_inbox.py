@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import settings
 from checkpoint import Checkpoint
-from paper_qa_lib import check_model, extract_text, find_title, generate_questions
+from paper_qa_lib import check_model, extract_any, find_title, generate_questions
 from qa_format import render_markdown
 
 # ---- CONFIG -----------------------------------------------------------
@@ -53,7 +53,7 @@ def main() -> str | None:
     for d in (INBOX_DIR, LIBRARY_DIR, QUESTIONS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
-    pdfs = sorted(INBOX_DIR.glob("*.pdf"))
+    pdfs = sorted(p for p in INBOX_DIR.iterdir() if p.suffix.lower() in (".pdf", ".html", ".htm"))
     if not pdfs:
         log("No new papers in inbox. Nothing to do.")
         return
@@ -74,12 +74,14 @@ def main() -> str | None:
 
         log(f"Processing {pdf_path.name}...")
         try:
-            text = extract_text(str(pdf_path), log=log)
+            text = extract_any(str(pdf_path), log=log)
             if not text.strip():
                 log(f"  WARNING: no extractable text in {pdf_path.name}, even after OCR. Skipping.")
                 continue
 
-            title = find_title(str(pdf_path), text, config["model"], log=log) or pdf_path.stem
+            # A saved article already carries its title as the first heading.
+            title = (text.split("\n\n")[0].removeprefix("## ").strip() if pdf_path.suffix.lower() != ".pdf"
+                     else find_title(str(pdf_path), text, config["model"], log=log)) or pdf_path.stem
             log(f"    title: {title}")
             progress = Checkpoint(pdf_path.stem, text)
             questions, summary = generate_questions(text, config["model"], config["num_questions"],

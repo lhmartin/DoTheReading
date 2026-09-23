@@ -268,6 +268,44 @@ function describeRunLine(line, progress) {
   return null; // timings, tracebacks and the like stay in the log file
 }
 
+async function addUrl(url) {
+  if (!url) return;
+  state.urlActivity = activity("url");
+  state.urlActivity.start("Fetching the article…");
+  $("add-url").disabled = true;
+  $("url-input").disabled = true;
+  try {
+    const result = await window.study.addUrl(url);
+    if (!result.ok) throw new Error(result.error || "couldn't add that link");
+    const pdf = result.pdf ? ", with the PDF to read" : "";
+    state.urlActivity.finish(`Added ${result.title}`, `${result.characters.toLocaleString()} characters${pdf}. Press Process now when ready.`);
+    $("url-input").value = "";
+    state.dismissedClipUrl = url;
+    $("clip-offer").hidden = true;
+  } catch (err) {
+    state.urlActivity.finish("Couldn't add that link", err.message);
+  }
+  state.urlActivity = null;
+  $("add-url").disabled = false;
+  $("url-input").disabled = false;
+  refresh();
+}
+
+// If there's a link on the clipboard, offer it rather than making them paste.
+async function offerClipboardUrl() {
+  try {
+    const url = await window.study.clipboardUrl();
+    const known = !url || url === state.dismissedClipUrl || url === state.lastOfferedUrl;
+    $("clip-offer").hidden = Boolean(known);
+    if (!known) {
+      state.lastOfferedUrl = url;
+      $("clip-url").textContent = url;
+    }
+  } catch {
+    $("clip-offer").hidden = true;
+  }
+}
+
 async function runInbox() {
   // Check the model is there before starting: a run that can't work takes
   // minutes to say so otherwise.
@@ -712,7 +750,7 @@ document.querySelectorAll(".rail-btn[data-view]").forEach((button) => {
 
 $("refresh").addEventListener("click", () => {
   refresh();
-renderSettings();
+offerClipboardUrl();
   toast("Reloaded");
 });
 
@@ -808,6 +846,25 @@ window.study.onPullLog((line) => {
   );
 });
 
+$("add-url").addEventListener("click", () => addUrl($("url-input").value.trim()));
+$("url-input").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") addUrl($("url-input").value.trim());
+});
+$("clip-add").addEventListener("click", () => {
+  const url = $("clip-url").textContent;
+  $("clip-offer").hidden = true;
+  show("inbox");
+  addUrl(url);
+});
+$("clip-dismiss").addEventListener("click", () => {
+  state.dismissedClipUrl = $("clip-url").textContent;
+  $("clip-offer").hidden = true;
+});
+window.study.onAddUrlLog((line) => {
+  if (state.urlActivity) state.urlActivity.update({ sub: line });
+});
+window.addEventListener("focus", offerClipboardUrl);
+
 $("add-papers").addEventListener("click", async () => {
   try {
     reportAdded(await window.study.choosePapers());
@@ -836,4 +893,4 @@ document.addEventListener("keydown", (event) => {
 });
 
 refresh();
-renderSettings();
+offerClipboardUrl();

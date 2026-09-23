@@ -142,6 +142,16 @@ def pdfium_page_text(document, index: int) -> str:
     return document[index].get_textpage().get_text_range().replace("\r\n", "\n")
 
 
+def extract_any(path: str, ocr: bool = True, log=print) -> str:
+    """Text of a paper, whether it arrived as a PDF or as a saved web article."""
+    if Path(path).suffix.lower() in (".html", ".htm"):
+        import article
+
+        got = article.extract_article(Path(path).read_text(encoding="utf-8", errors="replace"))
+        return got["text"]
+    return extract_text(path, ocr=ocr, log=log)
+
+
 def extract_text(pdf_path: str, ocr: bool = True, log=print) -> str:
     """Extract text page by page, OCR-ing pages that have no text layer.
 
@@ -220,13 +230,51 @@ def _tail(text: str, overlap: int) -> str:
     return tail
 
 
-def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
+HEADING_RE = re.compile(r"^## .+$", flags=re.MULTILINE)
+
+
+def split_on_headings(text: str, chunk_size: int, overlap: int) -> list[str] | None:
+    """Sections of a web article, packed up to chunk_size. None if the text
+    has no headings (an extracted PDF), so chunking falls back to paragraphs."""
+    positions = [m.start() for m in HEADING_RE.finditer(text)]
+    if len(positions) < 3:
+        return None
+    sections = [text[start:end].strip() for start, end in zip(positions, positions[1:] + [len(text)])]
+    if text[:positions[0]].strip():
+        sections.insert(0, text[:positions[0]].strip())
+
+    chunks, current = [], ""
+    for section in sections:
+        if len(section) > chunk_size:  # a long section still has to be split
+            if current:
+                chunks.append(current)
+                current = ""
+            chunks.extend(chunk_text(section, chunk_size, overlap, allow_headings=False))
+            continue
+        if current and len(current) + 2 + len(section) > chunk_size:
+            chunks.append(current)
+            current = section
+        else:
+            current += ("\n\n" if current else "") + section
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP,
+               allow_headings: bool = True) -> list[str]:
     """Split text into chunks of at most `chunk_size` chars on paragraph
     boundaries. Each chunk after the first starts with up to `overlap` chars
     copied from the end of the previous one, so content near a boundary is
     seen with its surrounding context."""
     if not 0 <= overlap < chunk_size // 2:
         raise ValueError("overlap must be non-negative and less than half of chunk_size")
+
+    if allow_headings:
+        # An article with real headings chunks far better on its own sections.
+        by_heading = split_on_headings(text, chunk_size, overlap)
+        if by_heading:
+            return by_heading
 
     # Leave room for the overlap and a paragraph separator in every chunk.
     piece_limit = chunk_size - overlap - 2

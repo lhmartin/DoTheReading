@@ -23,6 +23,13 @@
           <p class="eyebrow" id="today-date"></p>
           <h1>Do the reading.</h1>
         </header>
+        <div class="clip-offer" id="clip-offer" hidden>
+          <span class="meta">A link is on your clipboard:</span>
+          <span class="clip-url" id="clip-url"></span>
+          <button class="btn" id="clip-add">Add it</button>
+          <button class="btn btn--ghost" id="clip-dismiss">No thanks</button>
+        </div>
+
         <div class="today-grid">
           <article class="card card--feature" id="suggested-card">
             <p class="eyebrow">Today's paper</p>
@@ -113,6 +120,24 @@
       <section class="view" id="view-inbox">
         <header class="masthead"><p class="eyebrow">Waiting to be processed</p><h1>Inbox</h1></header>
         <div class="card">
+          <p class="eyebrow">Add from the web</p>
+          <div class="url-row">
+            <input type="url" id="url-input" placeholder="Paste a link — bioRxiv, arXiv, a blog post…" />
+            <button class="btn btn--primary" id="add-url">Add</button>
+          </div>
+          <p class="meta" id="url-note">Web text reads better than a PDF: real sections, no column or hyphen damage. For bioRxiv and arXiv the PDF is fetched too, to read alongside.</p>
+          <div class="activity" id="url-activity" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <div class="activity-text">
+              <p class="activity-main" id="url-main"></p>
+              <p class="activity-sub" id="url-sub"></p>
+            </div>
+            <div class="activity-bar" id="url-bar" hidden><i></i></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:18px">
+          <p class="eyebrow">Waiting</p>
           <ul class="files" id="inbox-list"></ul>
           <div class="row">
             <button class="btn" id="add-papers">Add PDFs…</button>

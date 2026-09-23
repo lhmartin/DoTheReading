@@ -80,3 +80,29 @@ def test_empty_text():
 def test_rejects_bad_overlap(overlap):
     with pytest.raises(ValueError):
         chunk_text("text", chunk_size=1000, overlap=overlap)
+
+
+HEADED = ("Intro paragraph that sets things up.\n\n"
+          "## One\n\n" + "a" * 300 + "\n\n"
+          "## Two\n\n" + "b" * 300 + "\n\n"
+          "## Three\n\n" + "c" * 300)
+
+
+def test_articles_chunk_on_their_own_headings():
+    chunks = chunk_text(HEADED, chunk_size=700, overlap=100)
+    assert all(c.count("## ") <= 2 for c in chunks)
+    assert chunks[0].startswith("Intro paragraph"), "the lead-in stays with the first section"
+    assert "".join(chunks).count("## ") == 3, "no section is lost"
+
+
+def test_a_long_section_is_still_split():
+    long_section = "## Big\n\n" + "\n\n".join("word " * 60 for _ in range(12))
+    chunks = chunk_text("## A\n\nshort\n\n## B\n\nshort\n\n" + long_section, chunk_size=900, overlap=100)
+    assert len(chunks) > 2
+    assert all(len(c) <= 900 for c in chunks)
+
+
+def test_pdf_text_without_headings_is_unaffected():
+    paras = paragraphs(30)
+    chunks = chunk_text("\n\n".join(paras), chunk_size=1000, overlap=0)
+    assert "\n\n".join(chunks) == "\n\n".join(paras)
