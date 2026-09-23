@@ -384,6 +384,15 @@ async function addPastedText() {
   refresh();
 }
 
+function showTab(name) {
+  for (const tab of document.querySelectorAll(".tab")) {
+    tab.classList.toggle("is-active", tab.dataset.tab === name);
+  }
+  $("tab-questions").hidden = name !== "questions";
+  $("tab-notes").hidden = name !== "notes";
+  if (name === "notes") $("notes-text").focus();
+}
+
 // Notes live in the paper's question file, so they're there next time.
 async function loadNotes(paper) {
   state.notesPaper = paper;
@@ -392,7 +401,10 @@ async function loadNotes(paper) {
   $("notes-state").textContent = "";
   try {
     const result = await window.study.notes(paper);
-    if (result.ok && state.notesPaper === paper) box.value = result.notes;
+    if (result.ok && state.notesPaper === paper) {
+      box.value = result.notes;
+      $("notes-dot").hidden = !result.notes.trim();
+    }
   } catch {
     // no question file yet; the panel just stays empty
   }
@@ -412,6 +424,7 @@ async function saveNotes() {
     const result = await window.study.saveNotes({ paper, text });
     if (!result.ok) throw new Error(result.error);
     $("notes-state").textContent = "· saved";
+    $("notes-dot").hidden = !text.trim();
   } catch (err) {
     $("notes-state").textContent = `· not saved (${err.message})`;
   }
@@ -723,6 +736,7 @@ async function setSchedule(action) {
 function startSession(items, title) {
   if (!items.length) return toast("No questions there yet");
   loadNotes(items[0].paper);
+  showTab("questions");
   state.session = { items, index: 0, results: [], title };
   show("study");
   $("quiz-done").hidden = true;
@@ -742,6 +756,7 @@ function startPaper(stem) {
     $("quiz-done").hidden = true;
     $("study-title").textContent = paper.title;
     loadPdf(state.session.items[0]);
+    showTab("notes");  // nothing to quiz: the notes are the point
     return loadNotes(paper.stem);
   }
   startSession(
@@ -1052,6 +1067,9 @@ $("add-papers").addEventListener("click", async () => {
 });
 
 $("run-inbox").addEventListener("click", () => runInbox());
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => showTab(tab.dataset.tab));
+});
 $("notes-text").addEventListener("input", queueNotesSave);
 $("notes-text").addEventListener("blur", saveNotes);
 window.study.onProcessLog((line) => {

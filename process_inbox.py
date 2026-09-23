@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import settings
 from checkpoint import Checkpoint
 from paper_qa_lib import check_model, extract_any, find_title, generate_questions
-from qa_format import render_markdown
+from qa_format import read_notes, render_markdown, write_notes
 
 # ---- CONFIG -----------------------------------------------------------
 # Folders. The model, how many questions to keep, and any prompt guidance
@@ -36,6 +36,15 @@ LIBRARY_DIR = BASE_DIR / "library"      # processed PDFs get moved here
 QUESTIONS_DIR = BASE_DIR / "questions"  # generated .md question sets land here
 LOG_FILE = BASE_DIR / "process_log.txt"
 # ------------------------------------------------------------------------
+
+
+def render_keeping_notes(questions_path: Path, title: str, questions: list, note: str) -> str:
+    """The question file's new contents, carrying over any notes the reader
+    wrote: they live in the same file, and a rewrite must not eat them."""
+    rendered = render_markdown(title, questions, note=note)
+    if questions_path.exists():
+        return write_notes(rendered, read_notes(questions_path.read_text(encoding="utf-8")))
+    return rendered
 
 
 def log(message: str):
@@ -96,7 +105,8 @@ def main(only: list[str] | None = None) -> str | None:
                 log(f"  WARNING: no questions passed verification for {pdf_path.name}. Leaving it in the inbox.")
                 continue
             note = f"{pdf_path.name} · {summary}"
-            questions_path.write_text(render_markdown(title, questions, note=note), encoding="utf-8")
+            questions_path.write_text(render_keeping_notes(questions_path, title, questions, note),
+                                      encoding="utf-8")
 
             progress.clear()
             shutil.move(str(pdf_path), str(LIBRARY_DIR / pdf_path.name))

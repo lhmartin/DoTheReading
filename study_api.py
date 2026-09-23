@@ -526,6 +526,7 @@ def shelve_without_questions(base: Path, name: str) -> dict:
         questions_path.write_text(
             render_markdown(title, [], note=f"{name} · added for reading; no questions generated."),
             encoding="utf-8")
+    # (an existing file is left alone, notes and all)
     shutil.move(str(source), str(library / source.name))
     return {"ok": True, "title": title, "stem": source.stem}
 

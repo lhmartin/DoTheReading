@@ -68,3 +68,20 @@ def test_memory_settings_state_reads_stored_values(monkeypatch, stored, ok):
     monkeypatch.setattr(study_api.platform, "system", lambda: "Windows")
     state = study_api.memory_settings_state(read=stored.get)
     assert state["ok"] is ok and state["supported"] is True
+
+
+def test_rewriting_a_question_file_keeps_the_notes(tmp_path):
+    """Notes live in the question file, so rewriting it must carry them over."""
+    from process_inbox import render_keeping_notes
+    from qa_format import read_notes, render_markdown, write_notes
+
+    path = tmp_path / "paper_questions.md"
+    questions = [{"type": "overview", "question": "What?", "answer": "This.", "evidence": "e", "page": 1}]
+
+    fresh = render_keeping_notes(path, "A Paper", questions, "note")
+    assert read_notes(fresh) == "", "nothing to carry over on a first run"
+
+    path.write_text(write_notes(fresh, "Re-read section 3 before the meeting."))
+    rewritten = render_keeping_notes(path, "A Paper (v2)", questions, "note")
+    assert read_notes(rewritten) == "Re-read section 3 before the meeting."
+    assert "A Paper (v2)" in rewritten, "the questions themselves are still replaced"

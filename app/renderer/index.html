@@ -63,6 +63,12 @@
         </div>
 
         <aside class="quiz">
+          <div class="tabs" role="tablist">
+            <button class="tab is-active" data-tab="questions" role="tab">Questions</button>
+            <button class="tab" data-tab="notes" role="tab">Notes<em class="tab-dot" id="notes-dot" hidden></em></button>
+          </div>
+
+          <div class="tab-panel" id="tab-questions">
           <div class="quiz-progress"><span id="quiz-dots"></span></div>
           <div class="quiz-body" id="quiz-body">
             <p class="eyebrow" id="q-type"></p>
@@ -101,18 +107,17 @@
             </div>
           </div>
 
-          <div class="notes" id="notes-panel">
-            <label class="field">
-              <span class="eyebrow">Your notes on this paper <em id="notes-state"></em></span>
-              <textarea id="notes-text" rows="4" placeholder="Anything you want to remember next time you open this paper…"></textarea>
-            </label>
-          </div>
-
           <div class="quiz-done" id="quiz-done" hidden>
             <p class="eyebrow">Session complete</p>
             <p class="score" id="score"></p>
             <ul class="missed" id="missed"></ul>
             <button class="btn btn--primary" id="finish">Back to today</button>
+          </div>
+          </div>
+
+          <div class="tab-panel tab-panel--notes" id="tab-notes" hidden>
+            <p class="eyebrow">Your notes on this paper <em id="notes-state"></em></p>
+            <textarea id="notes-text" placeholder="Anything you want to remember next time you open this paper — what it's for, what to re-read, what you didn't follow…"></textarea>
           </div>
         </aside>
       </section>
