@@ -45,7 +45,7 @@ def test_wrong_types_are_ignored(base):
 def test_guidance_reaches_the_prompt():
     prompt = build_prompt("TEXT", 5, "the full text", guidance="  I'm a wet-lab biologist.  ")
     assert "I'm a wet-lab biologist." in prompt
-    assert prompt.index("I'm a wet-lab biologist.") < prompt.index("Include a mix of")
+    assert prompt.index("I'm a wet-lab biologist.") < prompt.index("Respond with JSON only")
     assert "What this reader wants" not in build_prompt("TEXT", 5, "the full text", guidance="   ")
 
 

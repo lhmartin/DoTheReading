@@ -120,6 +120,7 @@ def test_rank_drops_duplicates_and_bad_ids(fake):
 
 def test_generate_replaces_failed_questions_and_keeps_rank_order(fake, monkeypatch):
     monkeypatch.setattr(paper_qa_lib, "chunk_text", lambda text: [SECTION])
+    monkeypatch.setattr(paper_qa_lib, "framing_text", lambda chunks, limit=None: "")
     evidence = ["The sleep group recalled 23 percent more word pairs", "We train on 1,605 complexes released in 2025",
                 "the wake group was tested in the evening", "A limitation is the small sample"]
     gen = [{"type": "comprehension", "question": f"Question {i}?", "answer": f"a{i}", "evidence": e}
@@ -146,12 +147,33 @@ def test_clean_quote():
         "insufficient ability to discriminate binders from nonbinders"
 
 
-def test_balance_types_interleaves_keeping_rank_order():
-    from paper_qa_lib import balance_types
-    ranked = [{"type": t, "question": f"{t}{i}"} for i, t in enumerate(
-        ["critical", "critical", "critical", "methodology", "comprehension", "critical", "methodology"])]
-    assert [q["question"] for q in balance_types(ranked)] == [
-        "critical0", "methodology3", "comprehension4", "critical1", "methodology6", "critical2", "critical5"]
+def test_level_quota_adds_up_and_covers_every_rung():
+    from paper_qa_lib import level_quota
+
+    for total in (4, 8, 12, 20):
+        quota = level_quota(total)
+        assert sum(quota.values()) == total
+        assert all(count >= 1 for count in quota.values()), "every rung gets at least one question"
+    assert level_quota(12)["approach"] >= level_quota(12)["overview"]
+
+
+def test_selection_fills_each_level_then_orders_big_picture_first():
+    from paper_qa_lib import select_by_level
+
+    ranked = ([{"type": "evidence", "question": f"e{i}"} for i in range(6)]
+              + [{"type": "overview", "question": "o1"}, {"type": "approach", "question": "a1"},
+                 {"type": "critique", "question": "c1"}])
+    chosen = select_by_level(ranked, 4)[:4]
+    assert [q["type"] for q in chosen] == ["overview", "approach", "evidence", "critique"], \
+        "a set of four should walk from the whole paper down to a criticism"
+
+
+def test_selection_falls_back_when_a_level_is_missing():
+    from paper_qa_lib import select_by_level
+
+    ranked = [{"type": "evidence", "question": f"e{i}"} for i in range(5)]
+    chosen = select_by_level(ranked, 3)[:3]
+    assert len(chosen) == 3 and all(q["type"] == "evidence" for q in chosen)
 
 
 def test_judge_rejects_false_premise_or_unsupported_answer(fake):
@@ -167,13 +189,15 @@ def test_judge_rejects_false_premise_or_unsupported_answer(fake):
 
 def test_generate_skips_questions_with_duplicate_evidence(fake, monkeypatch):
     monkeypatch.setattr(paper_qa_lib, "chunk_text", lambda text: [SECTION])
+    monkeypatch.setattr(paper_qa_lib, "framing_text", lambda chunks, limit=None: "")
     same = "The sleep group recalled 23 percent more word pairs"
-    gen = [{"type": "comprehension", "question": f"Question {i}?", "answer": f"a{i}", "evidence": same}
+    gen = [{"type": "evidence", "question": f"Question {i}?", "answer": f"a{i}", "evidence": same}
            for i in range(2)]
-    gen.append({"type": "critical", "question": "Question 2?", "answer": "a2",
+    gen.append({"type": "critique", "question": "Question 2?", "answer": "a2",
                 "evidence": "the wake group was tested in the evening"})
+    # Q1 is dropped as a duplicate, so a second batch checks Q2 as its replacement.
     fake(questions=[{"questions": gen}], rank=[{"ranked_ids": [0, 1, 2]}],
-         blind=[blind(ids=(0, 1))], judge=[judged(ids=(0, 1))])
+         blind=[blind(ids=(0, 1)), blind(ids=(0,))], judge=[judged(ids=(0, 1)), judged()])
     questions, _ = generate_questions(SECTION, "m", num_questions=2, log=lambda m: None)
     assert [q["question"] for q in questions] == ["Question 0?", "Question 2?"]
 
@@ -252,3 +276,28 @@ def test_a_verified_own_quote_keeps_the_original_answer(fake):
     q = question(answer="23% more pairs.", evidence="The sleep group recalled 23 percent more word pairs")
     assert verify_question(q, SECTION, "m", log=lambda m: None)
     assert q["answer"] == "23% more pairs."
+
+
+def test_generate_opens_with_whole_paper_questions(fake, monkeypatch):
+    """The first pass asks about the paper as a whole, drawn from its framing
+    sections — the questions section-by-section generation never produces."""
+    discussion = ("## Discussion\n\nTaken together, sleep consolidates memory of word pairs "
+                  "learned earlier in the day.")
+    monkeypatch.setattr(paper_qa_lib, "chunk_text", lambda text: [SECTION, discussion])
+    overview = {"type": "overview", "question": "What problem does this solve?",
+                "answer": "Whether sleep consolidates memory.",
+                "evidence": "Taken together, sleep consolidates memory of word pairs learned earlier in the day."}
+    section = {"type": "evidence", "question": "How much better did they do?", "answer": "23 percent.",
+               "evidence": "The sleep group recalled 23 percent more word pairs"}
+    model = fake(
+        questions=[{"questions": [overview]}, {"questions": [section]}, {"questions": [section]}],
+        rank=[{"ranked_ids": [0, 1]}],
+        # the overview batch is checked first, then the section batch
+        blind=[blind(answer="Whether sleep consolidates memory.",
+                     quote="Taken together, sleep consolidates memory of word pairs learned earlier in the day."),
+               blind()],
+        judge=[judged(), judged()],
+    )
+    questions, _ = paper_qa_lib.generate_questions(SECTION, "m", 2, log=lambda m: None)
+    assert "AS A WHOLE" in model.prompts[0], "the first call asks about the paper, not a section"
+    assert [q["type"] for q in questions] == ["overview", "evidence"], "big picture comes first"

@@ -18,7 +18,8 @@ import pypdfium2
 import pytesseract
 import requests
 
-from qa_format import QUESTIONS_SCHEMA, normalize_for_match, parse_legacy_qa, parse_model_json, strip_json_fence
+from qa_format import (QUESTION_LEVELS, QUESTIONS_SCHEMA, normalize_for_match, parse_legacy_qa,
+                       parse_model_json, strip_json_fence)
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 # Context window in tokens. Set explicitly because Ollama's default (4096 on
@@ -27,6 +28,7 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 NUM_CTX = 8192
 MAX_JSON_ATTEMPTS = 2  # per model call, before giving up on a malformed reply
 MAX_REPLY_TOKENS = 2000  # ceiling per reply; generous for the JSON we ask for
+OVERVIEW_SOURCE = -1     # "chunk" index for questions about the whole paper
 KEEP_ALIVE = "30m"       # how long Ollama keeps the model loaded between calls
 CHUNK_SIZE = 12000    # chars; ~3,000 tokens per chunk
 CHUNK_OVERLAP = 1500  # chars from the end of each chunk repeated at the start of the next
@@ -440,25 +442,117 @@ def clean_quote(quote: str) -> str:
     return " ".join(re.sub(r"(\w)-\n(\w)", r"\1\2", quote).split())
 
 
-def balance_types(ranked: list[dict]) -> list[dict]:
-    """Interleave question types (keeping rank order within each type), so
-    the first N questions are a mix even if the ranking favours one type."""
-    by_type = {}
+# Roughly: a fifth orienting, a third on how it works, a quarter on what was
+# shown, a fifth on what's unresolved.
+LEVEL_WEIGHTS = {"overview": 0.2, "approach": 0.35, "evidence": 0.25, "critique": 0.2}
+
+
+def level_quota(num_questions: int) -> dict[str, int]:
+    """How many questions of each level a set of this size should hold.
+
+    A set smaller than the ladder can't cover every rung, so it fills from
+    the top down.
+    """
+    order = ["overview", "approach", "evidence", "critique"]
+    if num_questions < len(order):
+        return {level: (1 if i < num_questions else 0) for i, level in enumerate(order)}
+
+    ideal = {level: num_questions * LEVEL_WEIGHTS[level] for level in order}
+    quota = {level: max(1, int(ideal[level])) for level in order}
+    while sum(quota.values()) > num_questions:  # trim the fullest rung
+        fullest = max((l for l in order if quota[l] > 1), key=lambda l: quota[l], default=None)
+        if fullest is None:
+            break
+        quota[fullest] -= 1
+    while sum(quota.values()) < num_questions:  # give to whoever is furthest below its share
+        quota[max(order, key=lambda l: ideal[l] - quota[l])] += 1
+    return quota
+
+
+def select_by_level(ranked: list[dict], num_questions: int) -> list[dict]:
+    """Take the best of each level up to its quota, then fill any shortfall
+    with whatever ranked highest, and walk from overview down to critique."""
+    quota = level_quota(num_questions)
+    chosen, taken = [], {level: 0 for level in QUESTION_LEVELS}
     for q in ranked:
-        by_type.setdefault(q.get("type", ""), []).append(q)
-    queues = sorted(by_type.values(), key=lambda qs: ranked.index(qs[0]))
-    out = []
-    while any(queues):
-        for queue in queues:
-            if queue:
-                out.append(queue.pop(0))
-    return out
+        level = q.get("type", "")
+        if level in quota and taken[level] < quota[level]:
+            taken[level] += 1
+            chosen.append(q)
+    for q in ranked:  # short on a rung? fill from the rest, best first
+        if len(chosen) >= num_questions:
+            break
+        if q not in chosen:
+            chosen.append(q)
+    # The quota picks, big picture first; then the rest in rank order, so
+    # verification has replacements ready when it drops one.
+    picked = chosen[:num_questions]
+    return order_by_level(picked) + [q for q in ranked if q not in picked]
+
+
+def order_by_level(questions: list[dict]) -> list[dict]:
+    """Big picture first, details last; rank order within each level."""
+    rank = {level: i for i, level in enumerate(QUESTION_LEVELS)}
+    return sorted(questions, key=lambda q: rank.get(q.get("type", ""), len(rank)))
 
 
 # ---- Prompts ------------------------------------------------------------
 # Verification prompts put the section text FIRST: Ollama reuses its cache
 # for a shared prompt prefix, so several checks against the same section
 # only pay to read the section once.
+
+FRAMING_WORDS = ("abstract", "introduction", "discussion", "conclusion", "summary")
+
+
+def framing_text(chunks: list[str], limit: int = CHUNK_SIZE) -> str:
+    """The parts of a paper that describe it as a whole: abstract, intro and
+    discussion if we can find them, otherwise its opening and its end."""
+    framing = [c for c in chunks if any(w in c[:400].lower() for w in FRAMING_WORDS)]
+    if not framing:
+        framing = [chunks[0]] + ([chunks[-1]] if len(chunks) > 1 else [])
+    # Keep the first and last of them: the setup and the takeaways.
+    picked = [framing[0]] + ([framing[-1]] if len(framing) > 1 else [])
+    text = "\n\n[...]\n\n".join(picked)
+    return text[:limit]
+
+
+def build_overview_prompt(text: str, num_questions: int, guidance: str = "") -> str:
+    """Questions about the paper as a whole — the ones worth remembering a
+    month later, which section-by-section generation never asks."""
+    prompt = textwrap.dedent(f"""\
+        Below are the framing parts of a scientific paper (its abstract,
+        introduction and discussion). Write {num_questions} study questions
+        about the paper AS A WHOLE — the kind a colleague would ask you after
+        you'd read it:
+
+        - what problem it sets out to solve, and why that problem matters
+        - what it actually contributes (the claim, not the machinery)
+        - how it achieves that, in one or two sentences
+        - what the headline result is
+        - what the authors themselves say is still unresolved
+
+        Do not ask about specific numbers, hyperparameters, figure panels or
+        anything that only makes sense inside one section.
+
+        Use "overview" for questions about the problem, contribution and
+        headline result, and "critique" for what remains unresolved.
+    """)
+    if guidance.strip():
+        prompt += "\nWhat this reader wants from the questions:\n" + guidance.strip() + "\n"
+    prompt += textwrap.dedent("""
+        Keep answers to at most two sentences. Copy into "evidence" one
+        sentence from the text, word for word, that supports the answer.
+
+        Respond with JSON only:
+        {"questions": [{"type": "overview" | "critique",
+                        "question": "<question>",
+                        "answer": "<answer in at most two sentences>",
+                        "evidence": "<exact sentence copied from the text>"}]}
+
+        TEXT:
+    """)
+    return prompt + text + "\n"
+
 
 def build_prompt(text_chunk: str, num_questions: int, section_label: str, overlapping: bool = False,
                  guidance: str = "") -> str:
@@ -479,11 +573,16 @@ def build_prompt(text_chunk: str, num_questions: int, section_label: str, overla
         # The reader's own steer, e.g. "focus on experimental design".
         prompt += "\nWhat this reader wants from the questions:\n" + guidance.strip() + "\n"
     prompt += textwrap.dedent("""
-        Include a mix of:
-        - comprehension questions (what did they do / find)
-        - methodology questions (why this method, what are its limits)
-        - critical questions (limitations, assumptions, or open problems that
-          the text itself states or directly implies; not generic criticism)
+        These sit below the big-picture questions asked elsewhere, so ask
+        about this section's substance:
+        - "approach": how something works and why it was done that way
+        - "evidence": what was measured or found, and what it shows
+        - "critique": a limitation, assumption or open problem that the text
+          itself states or directly implies (not generic criticism)
+
+        Prefer what a reader should still know in a month over incidental
+        detail: no hyperparameter values, figure panel letters or counts that
+        carry no meaning on their own.
 
         Keep answers to at most two sentences — they are for recall, not
         summaries. Every answer must be supported by the text. For each
@@ -492,7 +591,7 @@ def build_prompt(text_chunk: str, num_questions: int, section_label: str, overla
         incidental details such as default hyperparameters.
 
         Respond with JSON only, in this shape:
-        {"questions": [{"type": "comprehension" | "methodology" | "critical",
+        {"questions": [{"type": "approach" | "evidence" | "critique",
                         "question": "<question>",
                         "answer": "<answer in at most two sentences>",
                         "evidence": "<exact sentence copied from the text>"}]}
@@ -732,6 +831,19 @@ def generate_questions(text: str, model: str, num_questions: int, log=print,
     done = checkpoint.sections_done if checkpoint else 0
     if done:
         log(f"    resuming after section {done}/{len(chunks)} ({len(candidates)} questions already written)")
+
+    # The whole-paper pass comes first and is checkpointed as "section 0", so
+    # a study set always opens with what the paper is for.
+    overview_source = framing_text(chunks)
+    if not done and overview_source.strip():
+        log("      reading the paper as a whole...")
+        overview_wanted = max(2, round(target * LEVEL_WEIGHTS["overview"] * 1.5))
+        for q in ask_for_questions(build_overview_prompt(overview_source, overview_wanted, guidance), model, log):
+            q["chunk"] = OVERVIEW_SOURCE
+            candidates.append(q)
+        if checkpoint:
+            checkpoint.save(0, candidates)
+
     for i, chunk in enumerate(chunks):
         if i < done:
             continue
@@ -746,7 +858,9 @@ def generate_questions(text: str, model: str, num_questions: int, log=print,
             checkpoint.save(i + 1, candidates)
 
     log(f"    ranking {len(candidates)} candidate questions...")
-    ranked = balance_types(rank_candidates(candidates, num_questions, model, log))
+    ranked = select_by_level(rank_candidates(candidates, num_questions, model, log), num_questions)
+    sources = {i: chunk for i, chunk in enumerate(chunks)}
+    sources[OVERVIEW_SOURCE] = overview_source
 
     # Verify in rank order, a batch at a time, but send each section's
     # questions together: the section text dominates the prompt.
@@ -762,7 +876,7 @@ def generate_questions(text: str, model: str, num_questions: int, log=print,
         for chunk_index, chunk_questions in sorted(by_chunk.items()):
             checked += len(chunk_questions)
             try:
-                results = verify_questions(chunk_questions, chunks[chunk_index], model, log)
+                results = verify_questions(chunk_questions, sources[chunk_index], model, log)
             except ValueError as e:
                 results = [False] * len(chunk_questions)
                 for q in chunk_questions:
@@ -777,7 +891,7 @@ def generate_questions(text: str, model: str, num_questions: int, log=print,
                 else:
                     log(f"      dropped: {q['question'][:70]}... ({q['verification'][:80]})")
 
-    verified.sort(key=ranked.index)  # batches were verified section by section
+    verified = order_by_level(sorted(verified, key=ranked.index))  # overview first, then detail
     pages = page_index(text)
     for q in verified:
         q["page"] = find_page(q["evidence"], pages)

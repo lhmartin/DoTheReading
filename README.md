@@ -274,15 +274,40 @@ are split at line/word boundaries. Tune `CHUNK_SIZE` / `CHUNK_OVERLAP` in
 once. The context window is set explicitly (`NUM_CTX = 8192`) because
 Ollama's default is too small for a full chunk and it silently truncates.
 
+**Adding papers.** Drag a PDF onto the window, or paste a URL: web full
+text is a much better input than a PDF (reading order, real headings, no
+ligature or column damage, no parser crashes). bioRxiv/medRxiv and arXiv
+links also fetch the PDF, to read alongside. Any article-shaped page works —
+blogs, Substack — and articles chunk on their own headings.
+
+On the same bioRxiv paper: the PDF yielded 8 verified questions of 43
+checked; the URL yielded 12 of 12.
+
+**Question ladder.** A study set walks from the whole paper down to its
+details, rather than wherever the sections happened to lead:
+
+| Level | Asks about | Share |
+|---|---|---|
+| `overview` | the problem, the contribution, the headline result | ~20% |
+| `approach` | how it works, why built that way | ~35% |
+| `evidence` | what was measured, what it shows | ~25% |
+| `critique` | limitations the paper itself states | ~20% |
+
 **Question pipeline** (`generate_questions` in `paper_qa_lib.py`):
 
+0. *Read the paper as a whole*: a pass over its framing sections (abstract,
+   introduction, discussion) asks what problem it solves, what it
+   contributes and what's unresolved — the questions section-by-section
+   generation never produces.
 1. *Generate* ~1.5× `NUM_QUESTIONS` candidates across the sections, each
    with a verbatim `evidence` sentence from the text.
 2. *Rank*: the model returns candidate IDs best-first, dropping
    near-duplicates and pushing trivia down (cheap: it doesn't rewrite them).
-3. *Verify*, in rank order until `NUM_QUESTIONS` pass. For each question
-   the model re-answers it **blind** from its source section (without seeing
-   the original answer) and must quote the supporting sentence. The code
+   Each level then gets its quota, and the set is ordered big picture first.
+3. *Verify*, in rank order until `NUM_QUESTIONS` pass, a section at a time
+   (its text dominates the prompt, so its questions are checked together).
+   The model re-answers each **blind** from its source section (without
+   seeing the original answer) and must quote the supporting sentence. The code
    checks that a quote really appears in the section (ignoring
    case/spacing/punctuation/hyphenation), then the model judges whether the
    two answers agree. Questions that fail are dropped and replaced by the

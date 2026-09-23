@@ -20,7 +20,10 @@ import json
 import re
 import unicodedata
 
-QUESTION_TYPES = ["comprehension", "methodology", "critical"]
+# A study set should walk from the whole paper down to its details, so a
+# question's "type" is the rung it sits on rather than a flavour.
+QUESTION_LEVELS = ["overview", "approach", "evidence", "critique"]
+QUESTION_TYPES = QUESTION_LEVELS  # the field is still called "type" on disk
 
 # Passed to Ollama's `format` field to constrain generation to this shape.
 QUESTIONS_SCHEMA = {

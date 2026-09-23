@@ -34,9 +34,9 @@ def test_parses_legacy_qa_files():
 
 
 def test_parse_model_json():
-    raw = '{"questions": [{"type": "methodology", "question": "Why?", "answer": "Because.", "evidence": "Quote."}]}'
+    raw = '{"questions": [{"type": "approach", "question": "Why?", "answer": "Because.", "evidence": "Quote."}]}'
     assert parse_model_json(raw) == [
-        {"type": "methodology", "question": "Why?", "answer": "Because.", "evidence": "Quote."}]
+        {"type": "approach", "question": "Why?", "answer": "Because.", "evidence": "Quote."}]
 
 
 def test_parse_model_json_tolerates_drift():
