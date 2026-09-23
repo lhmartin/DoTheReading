@@ -93,3 +93,26 @@ def test_single_column_page_is_not_split(make_pdf):
             for i in range(20)]
     text = extract_text(make_pdf([rows]), log=lambda m: None)
     assert [l for l in text.splitlines() if l.startswith("a full")] == [r[2] for r in rows]
+
+
+def test_a_page_pdfplumber_chokes_on_is_read_by_pdfium(make_pdf, monkeypatch):
+    """pdfminer fails on some real pages (dense figures) with errors that
+    differ between runs; the page should still reach the model."""
+    import paper_qa_lib
+
+    path = make_pdf([[LOREM], ["Second page text here."]])
+    real_read_page = paper_qa_lib.read_page
+    calls = []
+
+    def flaky_read_page(page):
+        calls.append(page.page_number)
+        if page.page_number == 2:
+            raise RuntimeError("'str' object has no attribute 'isEnabledFor'")
+        return real_read_page(page)
+
+    monkeypatch.setattr(paper_qa_lib, "read_page", flaky_read_page)
+    logs = []
+    text = extract_text(path, log=logs.append)
+    assert LOREM in text
+    assert "Second page text here." in text, "the failed page was rescued by pdfium"
+    assert any("pdfium" in m for m in logs)

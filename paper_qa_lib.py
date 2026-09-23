@@ -14,6 +14,7 @@ import textwrap
 from pathlib import Path
 
 import pdfplumber
+import pypdfium2
 import pytesseract
 import requests
 
@@ -135,6 +136,12 @@ def read_page(page) -> str:
     return re.sub(r"\(cid:\d+\)", "", text)  # glyphs with no text mapping (math fonts)
 
 
+def pdfium_page_text(document, index: int) -> str:
+    """Text of one page via pdfium — pdfplumber's own rendering engine, which
+    copes with pages that make pdfminer fall over."""
+    return document[index].get_textpage().get_text_range().replace("\r\n", "\n")
+
+
 def extract_text(pdf_path: str, ocr: bool = True, log=print) -> str:
     """Extract text page by page, OCR-ing pages that have no text layer.
 
@@ -143,9 +150,19 @@ def extract_text(pdf_path: str, ocr: bool = True, log=print) -> str:
     text_parts = []
     found_text = False
     ocr_count = skipped_count = 0
+    fallback = None
+    fallback_pages = 0
     with pdfplumber.open(pdf_path) as pdf:
         for i, page in enumerate(pdf.pages):
-            page_text = read_page(page)
+            try:
+                page_text = read_page(page)
+            except Exception as e:
+                # pdfminer gives up on some pages (dense figures, odd content
+                # streams) with errors that vary run to run. pdfium reads them.
+                fallback = fallback or pypdfium2.PdfDocument(pdf_path)
+                page_text = pdfium_page_text(fallback, i)
+                fallback_pages += 1
+                log(f"    page {i + 1}: pdfplumber failed ({type(e).__name__}), read it with pdfium instead")
             if ocr and needs_ocr(page_text):
                 if not ocr_available():
                     skipped_count += 1
@@ -159,6 +176,8 @@ def extract_text(pdf_path: str, ocr: bool = True, log=print) -> str:
                 found_text = True
             text_parts.append(f"--- Page {i + 1} ---\n{page_text}")
 
+        if fallback_pages:
+            log(f"    {fallback_pages} page(s) needed pdfium; their columns may be interleaved.")
         if ocr_count:
             log(f"    OCR'd {ocr_count}/{len(pdf.pages)} page(s) with no text layer.")
         if skipped_count:
