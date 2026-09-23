@@ -575,9 +575,20 @@ function loadPdf(item, page) {
   empty.hidden = true;
   // Only (re)load when the paper changes, or when jumping to a page on
   // request: setting src re-fetches the file and loses the reader's place.
-  if (frame.dataset.paper === item.pdf && !page) return;
-  frame.dataset.paper = item.pdf;
-  frame.src = `file://${item.pdf.replace(/\\/g, "/")}#page=${page || 1}`;
+  const samePaper = frame.dataset.paper === item.pdf;
+  if (samePaper && (!page || String(page) === frame.dataset.page)) return;
+  const url = `file://${item.pdf.replace(/\\/g, "/")}#page=${page || 1}`;
+
+  // Chromium's PDF viewer ignores a src that differs only by #page=, and
+  // clearing src first doesn't make it reload either — so swap in a fresh
+  // frame, which always loads at the requested page.
+  const fresh = document.createElement("iframe");
+  fresh.id = frame.id;
+  fresh.title = frame.title;
+  fresh.dataset.paper = item.pdf;
+  fresh.dataset.page = String(page || 1);
+  fresh.src = url;
+  frame.replaceWith(fresh);
 }
 
 function renderQuestion() {

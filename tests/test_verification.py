@@ -230,3 +230,25 @@ def test_check_model(monkeypatch, installed, model, expected):
 def test_check_model_when_ollama_is_down(monkeypatch):
     monkeypatch.setattr(paper_qa_lib, "installed_models", lambda: None)
     assert "Could not reach Ollama" in paper_qa_lib.check_model("any")
+
+
+def test_a_fallback_quote_brings_its_own_answer(fake):
+    """If the question's own evidence isn't in the text, the quote shown comes
+    from the blind answer — so the answer shown must too, or the pair can
+    contradict each other."""
+    fake(blind=[blind(answer="The second receptor was monitored but not optimised.",
+                      quote="the wake group was tested in the evening")],
+         judge=[judged("agree", "same claim")])
+    q = question(answer="Single-target campaigns had lower pass rates.",
+                 evidence="A sentence that appears nowhere in the paper at all.")
+    assert verify_question(q, SECTION, "m", log=lambda m: None)
+    assert q["evidence"] == "the wake group was tested in the evening"
+    assert q["answer"] == "The second receptor was monitored but not optimised.", \
+        "answer and quote must come from the same attempt"
+
+
+def test_a_verified_own_quote_keeps_the_original_answer(fake):
+    fake(blind=[blind(answer="Something else entirely.")], judge=[judged()])
+    q = question(answer="23% more pairs.", evidence="The sleep group recalled 23 percent more word pairs")
+    assert verify_question(q, SECTION, "m", log=lambda m: None)
+    assert q["answer"] == "23% more pairs."

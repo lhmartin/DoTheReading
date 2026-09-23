@@ -590,7 +590,12 @@ def verify_questions(questions: list[dict], text_chunk: str, model: str, log=pri
         if not (evidence_ok or quote_in_text(blind_quote, text_chunk)):
             passed[i], q["verification"] = False, "no quote found in the text"
             continue
+        # Keep the answer and its quote from the same attempt. Falling back to
+        # the blind quote while showing the original answer can pair a claim
+        # with a sentence that doesn't support it.
         q["_verified_quote"] = q["evidence"] if evidence_ok else blind_quote
+        q["_use_blind_answer"] = not evidence_ok
+        q["_blind_answer"] = str(answer["answer"]).strip()
         judge_items.append({"id": i, "question": q["question"],
                             "answer_a": q["answer"], "answer_b": str(answer["answer"])})
 
@@ -614,9 +619,12 @@ def verify_questions(questions: list[dict], text_chunk: str, model: str, log=pri
         elif verdict.get("verdict") not in ("agree", "partial"):
             passed[i] = False
         else:
-            q["evidence"] = clean_quote(q.pop("_verified_quote"))
+            q["evidence"] = clean_quote(q["_verified_quote"])
+            if q.get("_use_blind_answer"):
+                q["answer"] = q["_blind_answer"]
     for q in questions:
-        q.pop("_verified_quote", None)
+        for scratch in ("_verified_quote", "_use_blind_answer", "_blind_answer"):
+            q.pop(scratch, None)
     return passed
 
 
