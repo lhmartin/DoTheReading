@@ -605,20 +605,34 @@ function heatLevel(day) {
   return Math.min(4, weight <= 1 ? 1 : weight <= 3 ? 2 : weight <= 6 ? 3 : 4);
 }
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 function renderHeatmap(days) {
   const byDate = new Map(days.map((day) => [day.date, day]));
   const today = new Date();
   const start = new Date(today);
   start.setDate(start.getDate() - 181);
-  start.setDate(start.getDate() - start.getDay()); // begin on a Sunday, like a calendar
+  start.setDate(start.getDate() - start.getDay()); // columns are weeks, starting Sunday
 
   const cells = [];
-  for (let day = new Date(start); day <= today; day.setDate(day.getDate() + 1)) {
+  const months = [];
+  let column = 0;
+  let lastMonth = null;
+  for (const day = new Date(start); day <= today; day.setDate(day.getDate() + 1)) {
     const date = day.toISOString().slice(0, 10);
     const entry = byDate.get(date);
     cells.push(`<span class="cell level-${entry ? heatLevel(entry) : 0}" data-date="${date}"></span>`);
+    if (day.getDay() === 0) {
+      column += 1;
+      // Label a column when its week opens a new month, as GitHub does.
+      if (day.getMonth() !== lastMonth && day.getDate() <= 7) {
+        lastMonth = day.getMonth();
+        months.push(`<span style="grid-column:${column}">${MONTH_NAMES[lastMonth]}</span>`);
+      }
+    }
   }
   $("heatmap").innerHTML = cells.join("");
+  $("heatmap-months").innerHTML = months.join("");
 }
 
 function heatTooltip(cell) {
