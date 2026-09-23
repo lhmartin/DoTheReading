@@ -170,10 +170,15 @@ def suggest(papers: list[dict]) -> str | None:
     whatever was studied longest ago."""
     if not papers:
         return None
-    fresh = [p for p in papers if not p["counts"]["seen"]]
+    quizzable = [p for p in papers if p["counts"]["total"]]
+    fresh = [p for p in quizzable if not p["counts"]["seen"]]
     if fresh:
         return random.choice(fresh)["stem"]
-    return min(papers, key=lambda p: p["last_studied"] or "")["stem"]
+    # Papers kept only for reading come next, while they're still unread.
+    unread = [p for p in papers if not p["counts"]["total"] and not p["read_at"]]
+    if unread:
+        return random.choice(unread)["stem"]
+    return min(quizzable or papers, key=lambda p: p["last_studied"] or "")["stem"]
 
 
 def reading_days(papers: list[dict], history: QuizHistory, days: int = 182) -> list[dict]:

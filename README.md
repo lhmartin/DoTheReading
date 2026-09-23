@@ -97,19 +97,25 @@ Installed, it's in the Start menu. From a checkout, `DoTheReading.cmd` (or
 `npm start --prefix app`) opens it — the paper on the left, its questions
 on the right.
 
-- **Today** suggests a paper: something you haven't studied, otherwise
-  whatever you looked at longest ago. "Suggest another" reshuffles, and the
-  review pile is one click from the same screen.
-- **Study** shows the PDF beside the current question. Reveal the answer
-  and you get the supporting quote; "Jump to page N" takes the PDF to where
-  it came from. Mark yourself with the buttons or the `y`/`n` keys
-  (`space` reveals).
+- **Today** suggests a paper: something with questions you haven't
+  studied, then anything you kept only for reading, otherwise whatever you
+  looked at longest ago. "Suggest another" reshuffles, and the review pile
+  is one click from the same screen.
+- **Study** shows the paper beside the current question, with the sidebar
+  out of the way; drag the divider to resize (double-click resets it).
+  Reveal the answer and you get the supporting quote; "Show in the paper"
+  scrolls to that passage and highlights it, in a PDF or a saved web
+  article. The reader has its own page, zoom and find controls (`Ctrl+F`,
+  `Ctrl`+scroll to zoom) and remembers where you left each PDF. Mark
+  yourself with the buttons or the `y`/`n` keys (`space` reveals, `Esc`
+  leaves).
 - **Grade me with the model** (a checkbox on each question) turns it into
   a written exercise: type your answer, the local model marks it
   correct/partly/incorrect with a sentence of feedback, then you still
   mark yourself. ~10s per answer once the model is loaded.
 - **Library** lists every processed paper with its score and review count,
-  and can show all questions without quizzing.
+  and can show all questions without quizzing. Search by title, or filter
+  to unread papers or ones with questions to review.
 - **Inbox** lists PDFs waiting, and "Process now" runs the nightly job
   immediately with its log streamed into the window. Drag PDFs anywhere
   onto the window to queue them (or use "Add PDFs…"); they're copied, so
@@ -121,7 +127,8 @@ on the right.
   questions per paper, a free-text steer added to every generation prompt
   ("I'm a wet-lab biologist: favour experimental design over the maths"),
   and the nightly-run toggle. These live in `~/PaperStudy/settings.json`,
-  so the 02:00 job uses the same choices.
+  so the 02:00 job uses the same choices. The light/dark theme is set there
+  too; it follows the system unless you pick one.
 
 **On picking a smaller model:** the app lists each model's size and a
 plain-language quality note, because the trade-off is real. Verification

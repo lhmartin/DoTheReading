@@ -6,6 +6,26 @@ const state = {
   data: null,        // last library payload
   session: null,     // { items: [{paper, title, question}], index, results: [] }
   revealed: false,
+  libraryFilter: "all",
+};
+
+// Theme: "system" follows the OS; light/dark pin it. A per-machine
+// preference, so localStorage is the right home for it.
+function storedTheme() {
+  try { return localStorage.getItem("dtr:theme") || "system"; } catch { return "system"; }
+}
+
+function applyTheme(choice) {
+  if (choice === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.dataset.theme = choice;
+  for (const button of document.querySelectorAll("[data-theme-choice]")) {
+    button.classList.toggle("is-active", button.dataset.themeChoice === choice);
+  }
+}
+applyTheme(storedTheme());
+
+const LEVEL_LABELS = {
+  overview: "Overview", approach: "Approach", evidence: "Evidence", critique: "Critique",
 };
 
 // ---- helpers ------------------------------------------------------------
@@ -19,6 +39,8 @@ function toast(message, ms = 2600) {
 }
 
 function show(view) {
+  // Reading gets the whole window: the sidebar steps aside.
+  document.body.classList.toggle("is-studying", view === "study");
   for (const section of document.querySelectorAll(".view")) {
     section.classList.toggle("is-active", section.id === `view-${view}`);
   }
@@ -33,6 +55,22 @@ function paperByStem(stem) {
 
 function plural(n, word) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function shortDate(iso) {
+  return new Date(iso.length === 10 ? iso + "T12:00:00" : iso)
+    .toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+
+function icon(name) {
+  return `<svg><use href="#i-${name}"/></svg>`;
+}
+
+function coverImage(paper, kind = paper.reader_kind || paper.kind) {
+  if (paper.cover) return `<img src="${coverUrl(paper.cover)}" alt="" />`;
+  return kind === "article"
+    ? `<span class="cover-placeholder">${icon("globe")}WEB</span>`
+    : `<span class="cover-placeholder">${icon("doc")}PDF</span>`;
 }
 
 // ---- loading ------------------------------------------------------------
@@ -59,51 +97,75 @@ function renderToday() {
   });
 
   const paper = paperByStem(suggested);
+  const card = $("suggested-card");
+  card.classList.toggle("feature--empty", !paper);
   if (paper) {
     $("suggested-title").textContent = paper.title;
     const { total, seen, correct } = paper.counts;
-    $("suggested-meta").textContent = seen
-      ? `${plural(total, "question")} · last time you got ${correct} of ${seen}`
-      : `${plural(total, "question")} · not studied yet`;
+    $("suggested-meta").textContent = !total
+      ? "Kept for reading · no questions yet"
+      : seen
+        ? `${plural(total, "question")} · last time you got ${correct} of ${seen}`
+        : `${plural(total, "question")} · not studied yet`;
+    // The first question, as a reason to start.
+    const first = paper.questions[0];
+    $("suggested-teaser").hidden = !first || Boolean(seen);
+    $("suggested-question").textContent = first ? first.question : "";
+    $("suggested-cover").innerHTML = coverImage(paper);
+    $("suggested-cover").dataset.study = paper.stem;
+    $("start-suggested").textContent = total ? "Start studying" : "Start reading";
     $("start-suggested").disabled = false;
   } else {
-    $("suggested-title").textContent = papers.length ? "Pick a paper from the library" : "Nothing processed yet";
-    $("suggested-meta").textContent = papers.length ? "" : "Drop PDFs in the inbox, then process them.";
-    $("start-suggested").disabled = true;
+    $("suggested-teaser").hidden = true;
+    $("suggested-title").textContent = papers.length ? "Pick a paper from the library" : "Nothing to read yet";
+    $("suggested-meta").textContent = papers.length
+      ? ""
+      : "Paste a link or drop a PDF into the Inbox. Questions are written overnight.";
+    // Nothing to start, so the button goes where the next step is.
+    $("start-suggested").textContent = papers.length ? "Open the library" : "Add a paper";
+    $("start-suggested").disabled = false;
   }
   $("shuffle").disabled = papers.length < 2;
 
   $("review-card").hidden = stats.review_pile === 0;
-  $("review-title").textContent = `${plural(stats.review_pile, "question")} you missed`;
+  $("review-count").textContent = stats.review_pile;
+  $("review-title").textContent = `${stats.review_pile === 1 ? "question" : "questions"} you missed last time`;
+
+  // The last seven days, from the same data as the reading grid.
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 6);
+  const since = weekAgo.toISOString().slice(0, 10);
+  const week = (stats.days || []).filter((day) => day.date >= since);
+  const read = week.reduce((n, day) => n + day.read.length, 0);
+  const answered = week.reduce((n, day) => n + day.answered, 0);
+  $("week-count").textContent = read;
+  $("week-meta").textContent = `${read === 1 ? "paper" : "papers"} read · ${plural(answered, "question")} answered`;
 
   const studied = papers.filter((p) => p.last_studied).slice(0, 4);
   $("recent").innerHTML = studied.length
-    ? `<p class="eyebrow">Recently studied</p><div class="stack" style="margin-top:14px">${studied
-        .map((p) => paperRow(p, false))
-        .join("")}</div>`
+    ? `<div class="section-head"><h2>Recently studied</h2></div>
+       <div class="list">${studied.map(paperRow).join("")}</div>`
     : "";
 }
 
 // ---- library ------------------------------------------------------------
 
-function paperRow(paper, withPeek = true) {
+function paperRow(paper) {
   const { total, seen, correct, review } = paper.counts;
   const tags = [
-    `<span class="tag">${plural(total, "question")}</span>`,
-    seen ? `<span class="tag tag--done">${correct}/${seen} right</span>` : `<span class="tag">unstudied</span>`,
+    total ? `<span class="tag">${plural(total, "question")}</span>` : `<span class="tag">for reading</span>`,
+    seen ? `<span class="tag tag--done">${correct}/${seen} right</span>` : "",
     review ? `<span class="tag tag--review">${review} to review</span>` : "",
-    paper.pdf ? "" : `<span class="tag">no PDF</span>`,
   ].join("");
+  const when = paper.last_studied ? `Studied ${shortDate(paper.last_studied)}` : "";
   return `
-    <article class="paper-row" data-stem="${paper.stem}">
+    <article class="list-row" data-stem="${paper.stem}">
+      <div class="thumb">${coverImage(paper)}</div>
       <div>
         <h3>${escapeHtml(paper.title)}</h3>
-        <div class="tags">${tags}</div>
+        <div class="tags">${tags}<span class="hint">${when}</span></div>
       </div>
-      <div class="row" style="margin:0">
-        ${withPeek ? `<button class="btn btn--ghost" data-peek="${paper.stem}">Questions</button>` : ""}
-        <button class="btn" data-study="${paper.stem}">Study</button>
-      </div>
+      <div class="actions"><button class="btn btn--sm" data-study="${paper.stem}">Open</button></div>
     </article>`;
 }
 
@@ -119,59 +181,81 @@ function coverUrl(path) {
 
 function shelfCard(paper) {
   const { total, seen, correct, review } = paper.counts;
-  const facts = [
-    paper.pages ? `${paper.pages} pages` : "",
-    total ? `${plural(total, "question")}` : "no questions — for reading",
-    total && seen ? `${correct}/${seen} right` : "",
-    paper.notes ? "has notes" : "",
-    paper.read_at ? "read" : "",
-    review ? `${review} to review` : "",
-  ].filter(Boolean);
   const added = new Date(paper.added).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  const facts = [paper.pages ? `${paper.pages} pages` : "", `added ${added}`].filter(Boolean);
+  const tags = [
+    paper.read_at ? `<span class="tag tag--read">Read</span>` : "",
+    total ? `<span class="tag">${plural(total, "question")}</span>` : `<span class="tag">For reading</span>`,
+    total && seen ? `<span class="tag tag--done">${correct}/${seen} right</span>` : "",
+    review ? `<span class="tag tag--review">${review} to review</span>` : "",
+    paper.notes ? `<span class="tag tag--notes">Notes</span>` : "",
+  ].join("");
   return `
     <article class="shelf-card" data-stem="${paper.stem}">
-      <div class="cover" data-cover-for="${paper.stem}">
-        ${paper.cover ? `<img src="${coverUrl(paper.cover)}" alt="" />` : `<span class="cover-placeholder">PDF</span>`}
+      <div class="cover" data-cover-for="${paper.stem}" data-study="${paper.stem}" title="Open">
+        ${coverImage(paper)}
       </div>
       <div class="shelf-body">
-        <h3>${escapeHtml(paper.title)}</h3>
+        <h3 title="${escapeHtml(paper.title)}">${escapeHtml(paper.title)}</h3>
         <p class="shelf-facts">${facts.join(" · ")}</p>
-        <p class="shelf-added">Added ${added}</p>
-        <div class="row" style="margin-top:auto">
-          <button class="btn btn--primary" data-study="${paper.stem}">Study</button>
-          <button class="btn btn--ghost" data-peek="${paper.stem}">Questions</button>
+        <div class="tags">${tags}</div>
+        <div class="row">
+          <button class="btn btn--sm btn--primary" data-study="${paper.stem}">${total ? "Study" : "Read"}</button>
+          ${total ? `<button class="btn btn--sm btn--ghost" data-peek="${paper.stem}">Questions</button>` : ""}
         </div>
       </div>
     </article>`;
 }
 
+function libraryMatches(paper) {
+  const query = $("library-search").value.trim().toLowerCase();
+  if (query && !paper.title.toLowerCase().includes(query)) return false;
+  if (state.libraryFilter === "unread") return !paper.read_at;
+  if (state.libraryFilter === "review") return paper.counts.review > 0;
+  return true;
+}
+
 function renderLibrary() {
   const { papers } = state.data;
-  $("library-list").innerHTML = papers.length
-    ? papers.map(shelfCard).join("")
-    : `<p class="meta">No processed papers yet. Drag a PDF onto the window to get started.</p>`;
-  loadMissingCovers(papers);
+  const shown = papers.filter(libraryMatches);
+  const read = papers.filter((p) => p.read_at).length;
+  $("library-lede").textContent = papers.length
+    ? `${plural(papers.length, "paper")} · ${read} read`
+    : "Everything you've added.";
+  $("library-list").innerHTML = !papers.length
+    ? `<div class="empty-state" style="grid-column:1/-1"><h3>Your library is empty</h3>
+         <p>Drop a PDF on this window or paste a link in the Inbox.</p></div>`
+    : shown.length
+      ? shown.map(shelfCard).join("")
+      : `<div class="empty-state" style="grid-column:1/-1"><p>No papers match.</p></div>`;
+  loadMissingCovers(shown);
   renderQueue();
+}
+
+// A queued paper, as a row: the same in the Library and the Inbox.
+function queueRow(paper) {
+  const size = Math.max(0.1, Math.round(paper.size_bytes / 1e5) / 10);
+  return `
+    <article class="list-row">
+      <div class="thumb">${paper.cover ? `<img src="${coverUrl(paper.cover)}" alt="" />` : icon(paper.kind === "pdf" ? "doc" : "globe")}</div>
+      <div>
+        <h3>${escapeHtml(paper.title)}</h3>
+        <div class="tags"><span class="tag">${paper.kind === "pdf" ? "PDF" : "Web article"}</span><span class="tag">${size} MB</span></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn--sm" data-process="${escapeHtml(paper.name)}" title="Write questions for this one now">Write questions</button>
+        <button class="btn btn--sm" data-shelve="${escapeHtml(paper.name)}" title="Keep it to read, without questions">Just read it</button>
+        <button class="btn btn--sm btn--ghost btn--icon btn--remove" data-remove="${escapeHtml(paper.name)}" title="Remove from the queue">${icon("x")}</button>
+      </div>
+    </article>`;
 }
 
 function renderQueue() {
   const queued = state.data.inbox || [];
   $("library-queue").innerHTML = queued.length
-    ? `<div class="queue-head"><p class="eyebrow">Not processed yet</p>
-         <p class="meta">Questions are written at 02:00, or when you press Process now in the Inbox.</p></div>` +
-      queued.map((paper) => `
-        <article class="queue-row">
-          <div>
-            <h3>${escapeHtml(paper.title)}</h3>
-            <div class="tags">
-              <span class="tag">${paper.kind === "pdf" ? "PDF" : "web article"}</span>
-              <span class="tag">${Math.max(1, Math.round(paper.size_bytes / 1e5) / 10)} MB</span>
-            </div>
-          </div>
-          <button class="btn" data-process="${escapeHtml(paper.name)}" title="Write questions for this one now">Process</button>
-          <button class="btn" data-shelve="${escapeHtml(paper.name)}" title="Keep it to read, without questions">Just read</button>
-          <button class="btn btn--remove" data-remove="${escapeHtml(paper.name)}" title="Remove from the queue">Remove</button>
-        </article>`).join("")
+    ? `<div class="section-head"><h2>Not processed yet</h2>
+         <p class="hint">Questions are written at 02:00, or when you ask for them.</p></div>
+       <div class="list list--dashed">${queued.map(queueRow).join("")}</div>`
     : "";
 }
 
@@ -186,8 +270,10 @@ async function loadMissingCovers(papers) {
       paper.pages = info.pages;
       const slot = document.querySelector(`[data-cover-for="${paper.stem}"]`);
       if (slot && info.cover) slot.innerHTML = `<img src="${coverUrl(info.cover)}" alt="" />`;
-      const card = document.querySelector(`.shelf-card[data-stem="${paper.stem}"] .shelf-facts`);
-      if (card && info.pages) card.textContent = card.textContent.replace(/^/, `${info.pages} pages · `);
+      const facts = document.querySelector(`.shelf-card[data-stem="${paper.stem}"] .shelf-facts`);
+      if (facts && info.pages && !facts.textContent.includes("pages")) {
+        facts.textContent = `${info.pages} pages · ${facts.textContent}`;
+      }
     } catch {
       // a cover is a nicety; a failure here shouldn't disturb the library
     }
@@ -195,7 +281,7 @@ async function loadMissingCovers(papers) {
 }
 
 function togglePeek(stem) {
-  const row = document.querySelector(`.shelf-card[data-stem="${stem}"], .paper-row[data-stem="${stem}"]`);
+  const row = document.querySelector(`.shelf-card[data-stem="${stem}"]`);
   const existing = row.querySelector(".questions-peek");
   if (existing) return existing.remove();
   const paper = paperByStem(stem);
@@ -210,19 +296,14 @@ function togglePeek(stem) {
 function renderInbox() {
   const { inbox } = state.data;
   $("inbox-list").innerHTML = inbox.length
-    ? inbox.map((paper) => `<li>
-        <span>${escapeHtml(paper.title)}</span>
-        <span class="row" style="margin:0;gap:8px">
-          <button class="btn" data-process="${escapeHtml(paper.name)}">Process</button>
-          <button class="btn" data-shelve="${escapeHtml(paper.name)}" title="Keep it to read, without questions">Just read</button>
-          <button class="btn btn--remove" data-remove="${escapeHtml(paper.name)}">Remove</button>
-        </span>
-      </li>`).join("")
-    : `<li class="empty">Nothing waiting — drag PDFs onto the window, paste a link, or use Add PDFs…</li>`;
+    ? inbox.map(queueRow).join("")
+    : `<p class="list-empty">Nothing waiting. Paste a link above or drop PDFs on the window.</p>`;
   const pip = $("inbox-pip");
   pip.hidden = inbox.length === 0;
   pip.textContent = inbox.length;
-  $("run-inbox").disabled = inbox.length === 0;
+  // Each row has its own button; the bulk one only earns its place with several.
+  $("run-inbox").hidden = inbox.length < 2;
+  $("run-inbox").textContent = `Write questions for all ${inbox.length}`;
 }
 
 // The pipeline and Ollama narrate themselves in log lines meant for the log
@@ -538,7 +619,6 @@ async function runInbox(only) {
   state.runActivity = activity("run");
   state.runActivity.start("Starting…");
   $("run-inbox").disabled = true;
-  $("run-note").textContent = "";
   try {
     const result = await window.study.processInbox(only);
     if (result && result.ok === false) throw new Error(result.error || "the run stopped early");
@@ -667,11 +747,11 @@ function renderProgress() {
   const s = state.data.stats;
   const accuracy = s.answered ? Math.round((s.correct / s.answered) * 100) : 0;
   $("figures").innerHTML = [
-    [s.papers_read + " / " + s.papers, "Papers read"],
-    [s.papers_studied, "Quizzed"],
-    [s.answered, "Questions answered"],
-    [accuracy + "%", "Answered right"],
-    [s.review_pile, "In review pile"],
+    [`${s.papers_read}<small> / ${s.papers}</small>`, "papers read"],
+    [s.papers_studied, "papers quizzed"],
+    [s.answered, "questions answered"],
+    [s.answered ? `${accuracy}%` : "–", "answered right"],
+    [s.review_pile, "in the review pile"],
   ]
     .map(([value, label]) => `<div class="figure"><b>${value}</b><span>${label}</span></div>`)
     .join("");
@@ -686,14 +766,16 @@ function renderProgress() {
       <span class="misses">missed ${item.misses}×</span>
     </li>`)
     .join("");
+  // Each bar is that day's questions, with the share you got right filled in,
+  // so a bad day reads as a long pale bar rather than an empty one.
   const days = s.by_day.slice(-10).reverse();
   const most = Math.max(1, ...days.map((d) => d.answered));
   $("day-card").hidden = days.length === 0;
   $("days").innerHTML = days
     .map(
-      (d) => `<li>
-        <span>${d.date === s.today ? "Today" : d.date}</span>
-        <span class="bar"><i style="width:${(d.correct / most) * 100}%"></i></span>
+      (d) => `<li title="${d.correct} of ${d.answered} right">
+        <span>${d.date === s.today ? "Today" : shortDate(d.date)}</span>
+        <span class="bar"><i class="answered" style="width:${(d.answered / most) * 100}%"></i><i class="right" style="width:${(d.correct / most) * 100}%"></i></span>
         <span>${d.correct}/${d.answered}</span>
       </li>`,
     )
@@ -863,6 +945,7 @@ function startSession(items, title) {
   loadNotes(items[0].paper);
   showReadState(items[0].paper);
   $("no-questions").hidden = true;
+  $("quiz-progress").hidden = false;
   showTab("questions");
   state.session = { items, index: 0, results: [], title };
   show("study");
@@ -883,7 +966,7 @@ function startPaper(stem) {
     $("quiz-body").hidden = true;
     $("quiz-done").hidden = true;
     $("no-questions").hidden = false;  // say so, rather than showing a blank panel
-    $("quiz-dots").innerHTML = "";
+    $("quiz-progress").hidden = true;
     $("study-title").textContent = paper.title;
     loadPdf(state.session.items[0]);
     showReadState(paper.stem);
@@ -908,36 +991,25 @@ function startReview() {
   startSession(items, "Review pile");
 }
 
-function loadPdf(item, page) {
-  const frame = $("pdf");
-  const empty = $("reader-empty");
-  if (!item.reader) {
-    frame.hidden = true;
-    frame.removeAttribute("src");
-    delete frame.dataset.paper;
-    empty.hidden = false;
-    return;
-  }
-  frame.hidden = false;
-  empty.hidden = true;
-  // Only (re)load when the paper changes, or when jumping to a page on
-  // request: setting src re-fetches the file and loses the reader's place.
-  const samePaper = frame.dataset.paper === item.reader;
-  if (samePaper && (!page || item.readerKind !== "pdf" || String(page) === frame.dataset.page)) return;
-  // Only a PDF understands #page=; a saved article just loads.
-  const path = item.reader.replace(/\\/g, "/");
-  const url = item.readerKind === "pdf" ? `file://${path}#page=${page || 1}` : `file://${path}`;
+// The reader is a module (reader.mjs) and may still be loading on the
+// first click; wait for it rather than dropping the request.
+function getReader() {
+  if (window.reader) return Promise.resolve(window.reader);
+  return new Promise((resolve) => window.addEventListener("reader-ready", () => resolve(window.reader), { once: true }));
+}
 
-  // Chromium's PDF viewer ignores a src that differs only by #page=, and
-  // clearing src first doesn't make it reload either — so swap in a fresh
-  // frame, which always loads at the requested page.
-  const fresh = document.createElement("iframe");
-  fresh.id = frame.id;
-  fresh.title = frame.title;
-  fresh.dataset.paper = item.reader;
-  fresh.dataset.page = String(page || 1);
-  fresh.src = url;
-  frame.replaceWith(fresh);
+async function loadPdf(item) {
+  (await getReader()).open(item.reader, item.readerKind === "pdf" ? "pdf" : "article");
+}
+
+async function showEvidence() {
+  const item = state.session.items[state.session.index];
+  const q = item.question;
+  const button = $("jump");
+  button.disabled = true;
+  const found = await (await getReader()).showQuote(q.evidence, q.page);
+  button.disabled = false;
+  if (!found) toast(q.page ? `Couldn't find the exact words, so here's page ${q.page}` : "Couldn't find that passage in the paper", 4000);
 }
 
 function renderQuestion() {
@@ -956,7 +1028,10 @@ function renderQuestion() {
     })
     .join("");
 
-  $("q-type").textContent = `Question ${index + 1} of ${items.length}${q.type ? " · " + q.type : ""}`;
+  $("quiz-count").textContent = `${index + 1} of ${items.length}`;
+  const level = LEVEL_LABELS[q.type] || (q.type ? q.type[0].toUpperCase() + q.type.slice(1) : "Question");
+  $("q-type").dataset.level = q.type || "";
+  $("q-type").innerHTML = `<i></i>${escapeHtml(level)}${state.session.title === "Review pile" ? ` · <span>${escapeHtml(item.title)}</span>` : ""}`;
   $("q-text").textContent = q.question;
   $("a-text").textContent = q.answer;
 
@@ -964,8 +1039,11 @@ function renderQuestion() {
   $("evidence").hidden = !hasEvidence;
   if (hasEvidence) {
     $("e-text").textContent = `“${q.evidence}”`;
-    $("jump").hidden = !q.page || item.readerKind !== "pdf";
-    $("e-page").textContent = q.page || "";
+    $("jump").hidden = !item.reader;
+    $("e-page").textContent = q.page && item.readerKind === "pdf" ? ` · p. ${q.page}` : "";
+    // Long quotes are clamped; offer the rest only when there is more.
+    $("evidence").classList.add("is-clamped");
+    $("evidence-more").hidden = q.evidence.length < 360;
   }
 
   // The answer box is always there — writing it down is the point. The
@@ -982,6 +1060,10 @@ function renderQuestion() {
 
 function revealAnswer() {
   state.revealed = true;
+  // Keep what they wrote in view beside the real answer.
+  const typed = $("typed").value.trim();
+  $("your-answer").hidden = !typed;
+  $("your-answer").innerHTML = typed ? `<span class="eyebrow">You wrote</span>${escapeHtml(typed)}` : "";
   $("answer-stage").hidden = true;
   $("answer-block").hidden = false;
 }
@@ -1042,6 +1124,9 @@ function finishSession() {
   $("quiz-body").hidden = true;
   $("quiz-done").hidden = false;
   $("score").textContent = `${right} / ${items.length}`;
+  $("score-note").textContent = right === items.length
+    ? "Every one. Nothing goes to the review pile."
+    : `${plural(items.length - right, "question")} will come back in your review pile.`;
   const missed = items.filter((_, i) => !results[i]);
   $("missed").innerHTML = missed.length
     ? `<p class="eyebrow">Back in the review pile</p>` +
@@ -1065,7 +1150,10 @@ offerClipboardUrl();
   toast("Reloaded");
 });
 
-$("start-suggested").addEventListener("click", () => startPaper(state.data.suggested));
+$("start-suggested").addEventListener("click", () => {
+  if (state.data?.suggested) return startPaper(state.data.suggested);
+  show(state.data?.papers.length ? "library" : "inbox");
+});
 $("start-review").addEventListener("click", startReview);
 $("shuffle").addEventListener("click", () => {
   const others = state.data.papers.filter((p) => p.stem !== state.data.suggested);
@@ -1097,9 +1185,10 @@ $("reveal").addEventListener("click", revealAnswer);
 $("check").addEventListener("click", checkTypedAnswer);
 $("mark-right").addEventListener("click", () => mark(true));
 $("mark-wrong").addEventListener("click", () => mark(false));
-$("jump").addEventListener("click", () => {
-  const item = state.session.items[state.session.index];
-  loadPdf(item, item.question.page);
+$("jump").addEventListener("click", showEvidence);
+$("evidence-more").addEventListener("click", () => {
+  $("evidence").classList.remove("is-clamped");
+  $("evidence-more").hidden = true;
 });
 $("open-pdf").addEventListener("click", () => {
   const item = state.session?.items[state.session.index];
@@ -1149,6 +1238,14 @@ async function changeMemorySettings(action) {
 
 $("fix-memory").addEventListener("click", () => changeMemorySettings("set"));
 $("clear-memory").addEventListener("click", () => changeMemorySettings("clear"));
+
+document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const choice = button.dataset.themeChoice;
+    try { localStorage.setItem("dtr:theme", choice); } catch { /* still applies for this session */ }
+    applyTheme(choice);
+  });
+});
 
 $("schedule-add").addEventListener("click", () => setSchedule("add"));
 $("schedule-remove").addEventListener("click", () => setSchedule("remove"));
@@ -1202,6 +1299,45 @@ $("add-papers").addEventListener("click", async () => {
 });
 
 $("run-inbox").addEventListener("click", () => runInbox());
+$("library-search").addEventListener("input", renderLibrary);
+document.querySelectorAll("[data-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.libraryFilter = button.dataset.filter;
+    document.querySelectorAll("[data-filter]").forEach((b) => b.classList.toggle("is-active", b === button));
+    renderLibrary();
+  });
+});
+
+// The divider between paper and questions can be dragged; the width sticks.
+(function splitter() {
+  const handle = $("splitter");
+  const study = $("view-study");
+  const clamp = (width) => Math.max(340, Math.min(width, window.innerWidth - 420));
+  try {
+    const saved = Number(localStorage.getItem("dtr:quiz-width"));
+    if (saved) study.style.setProperty("--quiz-width", `${clamp(saved)}px`);
+  } catch { /* default width */ }
+  handle.addEventListener("pointerdown", (event) => {
+    handle.setPointerCapture(event.pointerId);
+    handle.classList.add("is-dragging");
+    document.body.classList.add("is-resizing");
+  });
+  handle.addEventListener("pointermove", (event) => {
+    if (!handle.classList.contains("is-dragging")) return;
+    study.style.setProperty("--quiz-width", `${clamp(window.innerWidth - event.clientX)}px`);
+  });
+  handle.addEventListener("pointerup", () => {
+    handle.classList.remove("is-dragging");
+    document.body.classList.remove("is-resizing");
+    try {
+      localStorage.setItem("dtr:quiz-width", parseInt(study.style.getPropertyValue("--quiz-width"), 10));
+    } catch { /* a nicety */ }
+  });
+  handle.addEventListener("dblclick", () => {
+    study.style.removeProperty("--quiz-width");
+    try { localStorage.removeItem("dtr:quiz-width"); } catch { /* a nicety */ }
+  });
+})();
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => showTab(tab.dataset.tab));
 });
@@ -1224,10 +1360,18 @@ window.study.onProcessLog((line) => {
   if (update) state.runActivity.update(update);
 });
 
-// Keyboard: space/enter reveals, y/n marks.
+// Keyboard: space/enter reveals, y/n marks, Ctrl+F finds in the paper,
+// Esc leaves.
 document.addEventListener("keydown", (event) => {
-  if (!$("view-study").classList.contains("is-active") || $("quiz-done").hidden === false) return;
-  if (event.target.tagName === "TEXTAREA") return;
+  if (!$("view-study").classList.contains("is-active")) return;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+    event.preventDefault();
+    return window.reader?.focusFind();
+  }
+  if (["TEXTAREA", "INPUT", "SELECT"].includes(event.target.tagName)) return;
+  if (event.key === "Escape") return $("leave-study").click();
+  if (!$("quiz-done").hidden || $("tab-questions").hidden) return;
+  if (!state.session?.items[state.session.index]?.question) return;
   if (!state.revealed && (event.key === " " || event.key === "Enter")) {
     event.preventDefault();
     $("ai-toggle").checked ? checkTypedAnswer() : revealAnswer();

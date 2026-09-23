@@ -91,3 +91,32 @@ def test_reading_days_only_covers_the_recent_window(tmp_path):
     history = QuizHistory(tmp_path / "quiz_history.json")
     history.mark_read("ancient", when=datetime(2020, 1, 1))
     assert study_api.reading_days([{"stem": "ancient", "title": "Old"}], history, days=30) == []
+
+
+def paper(stem, total=0, seen=0, read_at=None, last_studied=None):
+    return {"stem": stem, "counts": {"total": total, "seen": seen}, "read_at": read_at,
+            "last_studied": last_studied}
+
+
+def test_suggest_prefers_an_unstudied_paper_with_questions():
+    import study_api
+
+    papers = [paper("reading-only"), paper("quiz", total=12), paper("done", total=8, seen=8)]
+    assert study_api.suggest(papers) == "quiz"
+
+
+def test_suggest_falls_back_to_unread_reading_only_papers():
+    import study_api
+
+    papers = [paper("done", total=8, seen=8, last_studied="2026-09-01"),
+              paper("read", read_at="2026-09-02"), paper("unread")]
+    assert study_api.suggest(papers) == "unread"
+
+
+def test_suggest_otherwise_picks_the_longest_unstudied():
+    import study_api
+
+    papers = [paper("recent", total=8, seen=8, last_studied="2026-09-20"),
+              paper("stale", total=8, seen=8, last_studied="2026-08-01"),
+              paper("read", read_at="2026-09-02")]
+    assert study_api.suggest(papers) == "stale"

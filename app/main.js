@@ -1,6 +1,6 @@
 // Electron main process. All study data comes from study_api.py in the repo
 // root, so the app never parses question files or history itself.
-const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const os = require("os");
@@ -87,6 +87,12 @@ function runSelfTest(win, resultFile) {
         return [...new Set(ids)].filter((id) => !document.getElementById(id));
       })()`);
       const environment = await win.webContents.executeJavaScript("window.study.environment()");
+      // The reader is a module with its own imports and a worker: check the
+      // whole chain loads, which is where a packaging mistake would show.
+      const pdfPages = await win.webContents.executeJavaScript(`new Promise((resolve) => {
+        const run = () => window.reader.selfTest().then(resolve, (err) => resolve(String(err)));
+        window.reader ? run() : window.addEventListener("reader-ready", run, { once: true });
+      })`);
       // The hidden attribute is easy to break with a stray display rule, and
       // an overlay stuck on top makes the app unusable.
       const overlayHidden = await win.webContents.executeJavaScript(
@@ -96,9 +102,11 @@ function runSelfTest(win, resultFile) {
       finish({
         ok: Boolean(environment && environment.settings && environment.settings.model)
           && overlayHidden
-          && missingIds.length === 0,
+          && missingIds.length === 0
+          && pdfPages === 1,
         overlayHidden,
         missingIds,
+        pdfPages,
         packaged: app.isPackaged,
         model: environment?.settings?.model,
         ollamaRunning: environment?.ollama?.running,
@@ -113,9 +121,13 @@ function runSelfTest(win, resultFile) {
 function createWindow() {
   const win = new BrowserWindow({
     show: !process.env.DTR_SELFTEST,
-    width: 1400,
+    width: Number(process.env.DTR_SHOT_WIDTH) || 1400,
     height: 900,
-    backgroundColor: "#12151c",
+    minWidth: 900,
+    minHeight: 600,
+    // Paint the app's own background while it loads, not a flash of another colour.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#171512" : "#f4f0e6",
+    autoHideMenuBar: true, // Alt still shows it; shortcuts keep working
     title: "DoTheReading",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -125,6 +137,17 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
+
+  // Links in a paper or article open in the browser; the app window never
+  // navigates away from itself.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (event, url) => {
+    event.preventDefault();
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+  });
 
   if (process.env.DTR_SELFTEST) runSelfTest(win, process.env.DTR_SELFTEST);
 
