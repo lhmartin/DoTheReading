@@ -677,6 +677,15 @@ function renderProgress() {
     .join("");
 
   renderHeatmap(s.days || []);
+
+  const sticking = s.sticking_points || [];
+  $("sticking-card").hidden = sticking.length === 0;
+  $("sticking").innerHTML = sticking
+    .map((item) => `<li>
+      <span class="q">${escapeHtml(item.question)}<span class="where">${escapeHtml(item.paper)}</span></span>
+      <span class="misses">missed ${item.misses}×</span>
+    </li>`)
+    .join("");
   const days = s.by_day.slice(-10).reverse();
   const most = Math.max(1, ...days.map((d) => d.answered));
   $("day-card").hidden = days.length === 0;
@@ -1196,6 +1205,7 @@ $("run-inbox").addEventListener("click", () => runInbox());
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => showTab(tab.dataset.tab));
 });
+$("review-from-progress").addEventListener("click", startReview);
 $("write-questions").addEventListener("click", writeQuestionsNow);
 $("mark-read").addEventListener("click", toggleRead);
 $("heatmap").addEventListener("mouseover", (event) => {

@@ -220,6 +220,7 @@
       <section class="view" id="view-progress">
         <header class="masthead"><p class="eyebrow">Since you started</p><h1>Progress</h1></header>
         <div class="figures" id="figures"></div>
+        <div class="progress-columns">
         <div class="card" id="grid-card">
           <p class="eyebrow">Reading, day by day</p>
           <div class="heatmap-scroll">
@@ -237,9 +238,18 @@
           </div>
         </div>
 
-        <div class="card" id="day-card" style="margin-top:18px">
+        <div class="card" id="day-card">
           <p class="eyebrow">Recent days</p>
           <ul class="days" id="days"></ul>
+        </div>
+        </div>
+
+        <div class="card" id="sticking-card" style="margin-top:18px">
+          <p class="eyebrow">What you keep missing</p>
+          <ul class="sticking" id="sticking"></ul>
+          <div class="row">
+            <button class="btn" id="review-from-progress">Work through the review pile</button>
+          </div>
         </div>
       </section>
 

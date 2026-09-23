@@ -199,6 +199,24 @@ def reading_days(papers: list[dict], history: QuizHistory, days: int = 182) -> l
     return sorted((day for day in by_day.values() if day["date"] >= first), key=lambda d: d["date"])
 
 
+def sticking_points(papers: list[dict], history: QuizHistory, limit: int = 8) -> list[dict]:
+    """Questions still in the review pile, the most-missed first: what the
+    Progress page is actually for."""
+    titles = {paper["stem"]: paper["title"] for paper in papers}
+    missed = []
+    for entry in history.questions.values():
+        attempts = entry.get("attempts") or []
+        if not attempts or attempts[-1]["correct"]:
+            continue
+        missed.append({
+            "question": entry["question"],
+            "paper": titles.get(entry["paper"], entry["paper"]),
+            "misses": sum(1 for attempt in attempts if not attempt["correct"]),
+        })
+    missed.sort(key=lambda item: (-item["misses"], item["question"]))
+    return missed[:limit]
+
+
 def overall_stats(papers: list[dict], history: QuizHistory) -> dict:
     attempts = [(a, e) for e in history.questions.values() for a in e["attempts"]]
     by_day = {}
@@ -215,6 +233,7 @@ def overall_stats(papers: list[dict], history: QuizHistory) -> dict:
         "review_pile": len(history.review_pile()),
         "by_day": sorted(by_day.values(), key=lambda d: d["date"]),
         "days": reading_days(papers, history),
+        "sticking_points": sticking_points(papers, history),
         "papers_read": sum(1 for p in papers if p.get("read_at")),
         "today": date.today().isoformat(),
     }
