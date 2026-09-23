@@ -277,8 +277,11 @@ async function addUrl(url) {
   try {
     const result = await window.study.addUrl(url);
     if (!result.ok) throw new Error(result.error || "couldn't add that link");
-    const pdf = result.pdf ? ", with the PDF to read" : "";
-    state.urlActivity.finish(`Added ${result.title}`, `${result.characters.toLocaleString()} characters${pdf}. Press Process now when ready.`);
+    const detail = result.note
+      ? result.note
+      : `${result.characters.toLocaleString()} characters${result.pdf ? ", with the PDF to read" : ""}. ` +
+        "Press Process now when ready.";
+    state.urlActivity.finish(`Added ${result.title}`, detail);
     $("url-input").value = "";
     state.dismissedClipUrl = url;
     $("clip-offer").hidden = true;

@@ -299,6 +299,46 @@ def add_papers(base: Path, paths: list[str]) -> dict:
 USER_AGENT = "Mozilla/5.0 (compatible; DoTheReading/1.0; +https://github.com/lhmartin/DoTheReading)"
 
 
+RETRY_STATUSES = {429, 503}
+
+
+def fetch_with_retry(url: str, attempts: int = 3, timeout: int = 60, log=lambda m: None):
+    """GET a URL, waiting out rate limits. Returns the response, or raises
+    the last error."""
+    import requests
+
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT})
+            if response.status_code not in RETRY_STATUSES:
+                response.raise_for_status()
+                return response
+            # Respect Retry-After when the server sends one.
+            wait = min(int(response.headers.get("Retry-After", 0) or 0) or 5 * attempt, 30)
+            last_error = requests.exceptions.HTTPError(f"{response.status_code} from {url}", response=response)
+        except requests.exceptions.RequestException as e:
+            last_error, wait = e, 3 * attempt
+        if attempt < attempts:
+            log(f"the site is busy — waiting {wait}s and trying again ({attempt}/{attempts})")
+            time.sleep(wait)
+    raise last_error
+
+
+def save_pdf_to_inbox(base: Path, pdf_url: str, slug: str, log=lambda m: None) -> bool:
+    """Last resort when a site won't serve us its text: process the PDF."""
+    try:
+        response = fetch_with_retry(pdf_url, attempts=2, timeout=120, log=log)
+    except Exception:
+        return False
+    if not response.content[:4] == b"%PDF":
+        return False
+    inbox = base / "inbox"
+    inbox.mkdir(parents=True, exist_ok=True)
+    (inbox / f"{slug}.pdf").write_bytes(response.content)
+    return True
+
+
 def add_url(base: Path, url: str, log=lambda m: None) -> dict:
     """Fetch an article, save it for processing, and keep the PDF to read
     when the source has one (bioRxiv, arXiv)."""
@@ -312,9 +352,19 @@ def add_url(base: Path, url: str, log=lambda m: None) -> dict:
     sources = article.canonical_sources(url)
     log("fetching the page…")
     try:
-        response = requests.get(sources["text_url"], timeout=60, headers={"User-Agent": USER_AGENT})
-        response.raise_for_status()
+        response = fetch_with_retry(sources["text_url"], log=log)
     except requests.exceptions.RequestException as e:
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        # A rate-limited site often still serves its PDF, which we can process.
+        if sources["pdf_url"]:
+            log("the site wouldn't serve its text — trying the PDF instead…")
+            slug = article.slug_for(url, None)
+            if save_pdf_to_inbox(base, sources["pdf_url"], slug, log=log):
+                return {"ok": True, "title": slug, "slug": slug, "characters": 0, "pdf": True,
+                        "note": "That site is rate-limiting us, so the PDF was added instead. "
+                                "Adding the link again later gets the cleaner web text."}
+        if status in RETRY_STATUSES:
+            return {"ok": False, "error": "That site is rate-limiting us. Wait a minute and try again."}
         return {"ok": False, "error": f"Couldn't fetch that page: {e}"}
 
     got = article.extract_article(response.text)
