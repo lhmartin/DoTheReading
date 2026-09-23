@@ -136,6 +136,23 @@ def parse_title(md_text: str) -> str | None:
     return None
 
 
+NOTES_HEADING = "## Notes"
+
+
+def read_notes(md_text: str) -> str:
+    """Whatever the reader wrote under `## Notes` in a questions file."""
+    _, separator, notes = md_text.partition("\n" + NOTES_HEADING + "\n")
+    return notes.strip() if separator else ""
+
+
+def write_notes(md_text: str, notes: str) -> str:
+    """Replace (or add) the reader's notes, leaving the questions untouched."""
+    body, separator, _ = md_text.partition("\n" + NOTES_HEADING + "\n")
+    body = body.rstrip()
+    notes = notes.strip()
+    return f"{body}\n\n{NOTES_HEADING}\n{notes}\n" if notes else body + "\n"
+
+
 def parse_markdown(md_text: str) -> list[dict]:
     """Pull questions out of a questions .md file, as dicts with keys
     type, question, answer, evidence ("" if none) and page (int or None).
@@ -145,6 +162,7 @@ def parse_markdown(md_text: str) -> list[dict]:
     before the switch still work.
     """
     # split() with one capture group alternates: type, section, type, ...
+    md_text = md_text.partition("\n" + NOTES_HEADING + "\n")[0]
     parts = _HEADING_RE.split(md_text)[1:]  # [0] is the title block
     questions = []
     for qtype, section in zip(parts[::2], parts[1::2]):

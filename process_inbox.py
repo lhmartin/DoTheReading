@@ -46,14 +46,19 @@ def log(message: str):
         f.write(line + "\n")
 
 
-def main() -> str | None:
-    """Returns None when the run completed, or a reason it couldn't start."""
+def main(only: list[str] | None = None) -> str | None:
+    """Process the inbox. `only` limits the run to those file names.
+
+    Returns None when the run completed, or a reason it couldn't start.
+    """
     config = settings.load()
     log_config = f"model {config['model']}, {config['num_questions']} questions"
     for d in (INBOX_DIR, LIBRARY_DIR, QUESTIONS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
     pdfs = sorted(p for p in INBOX_DIR.iterdir() if p.suffix.lower() in (".pdf", ".html", ".htm"))
+    if only:
+        pdfs = [p for p in pdfs if p.name in set(only)]
     if not pdfs:
         log("No new papers in inbox. Nothing to do.")
         return

@@ -160,8 +160,9 @@ ipcMain.handle("grade", (_event, { paper, question, reference, evidence, answer 
   ]),
 );
 
-ipcMain.handle("process-inbox", (event) =>
-  callApi(["process-inbox"], (line) => event.sender.send("process-log", line)),
+ipcMain.handle("process-inbox", (event, only) =>
+  callApi(["process-inbox", ...(only && only.length ? ["--only", ...only] : [])],
+    (line) => event.sender.send("process-log", line)),
 );
 
 ipcMain.handle("settings", () => callApi(["settings"]));
@@ -206,6 +207,16 @@ ipcMain.handle("add-text", (_event, { title, text }) => {
   const file = path.join(os.tmpdir(), `dothereading-${Date.now()}.txt`);
   fs.writeFileSync(file, text, "utf-8");
   return callApi(["add-text", "--title", title || "", "--text-file", file]);
+});
+
+ipcMain.handle("shelve", (_event, name) => callApi(["shelve", "--name", name]));
+
+ipcMain.handle("notes", (_event, paper) => callApi(["notes", "--paper", paper]));
+
+ipcMain.handle("save-notes", (_event, { paper, text }) => {
+  const file = path.join(os.tmpdir(), `dothereading-notes-${Date.now()}.txt`);
+  fs.writeFileSync(file, text, "utf-8");
+  return callApi(["save-notes", "--paper", paper, "--text-file", file]);
 });
 
 ipcMain.handle("remove-paper", (_event, name) => callApi(["remove-paper", "--name", name]));

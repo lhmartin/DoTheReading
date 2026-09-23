@@ -58,3 +58,28 @@ def test_parse_markdown_keeps_question_type():
     md = render_markdown("T", QUESTIONS)
     assert [q["type"] for q in parse_markdown(md)] == ["comprehension", "critical"]
     assert parse_markdown("## Q1\nNo type?\n\n**Answer:** yes\n")[0]["type"] == ""
+
+
+def test_notes_round_trip_without_disturbing_questions():
+    from qa_format import read_notes, write_notes
+
+    md = render_markdown("A Paper", QUESTIONS)
+    assert read_notes(md) == ""
+
+    with_notes = write_notes(md, "  The trick is the counter-selection step.  ")
+    assert read_notes(with_notes) == "The trick is the counter-selection step."
+    assert len(parse_markdown(with_notes)) == len(QUESTIONS), "questions survive"
+
+    rewritten = write_notes(with_notes, "Second thoughts.")
+    assert read_notes(rewritten) == "Second thoughts."
+    assert rewritten.count("## Notes") == 1, "notes are replaced, not stacked"
+
+    cleared = write_notes(rewritten, "")
+    assert read_notes(cleared) == "" and "## Notes" not in cleared
+
+
+def test_notes_are_never_read_as_a_question():
+    from qa_format import write_notes
+
+    md = write_notes(render_markdown("A Paper", QUESTIONS), "## Q99 looks like a heading\n\n**Answer:** trap")
+    assert len(parse_markdown(md)) == len(QUESTIONS)

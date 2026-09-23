@@ -650,3 +650,23 @@ blockquote p {
 }
 .btn--remove { border-color: transparent; color: var(--ink-faint); padding: 6px 10px; }
 .btn--remove:hover { color: var(--oxblood); border-color: var(--oxblood-soft); }
+
+/* ---- notes -------------------------------------------------------------- */
+
+.notes { padding: 0 30px 30px; margin-top: auto; }
+.notes .eyebrow em { font-style: normal; color: var(--moss); letter-spacing: 0.04em; }
+#notes-text {
+  width: 100%;
+  margin-top: 8px;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: #fffdf8;
+  color: var(--ink);
+  resize: vertical;
+}
+#notes-text:focus { outline: 2px solid var(--gold); outline-offset: -1px; }
+.tag--notes { border-color: var(--gold); color: var(--gold); }

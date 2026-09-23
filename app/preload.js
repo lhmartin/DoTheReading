@@ -5,7 +5,10 @@ contextBridge.exposeInMainWorld("study", {
   library: () => ipcRenderer.invoke("library"),
   record: (payload) => ipcRenderer.invoke("record", payload),
   grade: (payload) => ipcRenderer.invoke("grade", payload),
-  processInbox: () => ipcRenderer.invoke("process-inbox"),
+  processInbox: (only) => ipcRenderer.invoke("process-inbox", only),
+  shelve: (name) => ipcRenderer.invoke("shelve", name),
+  notes: (paper) => ipcRenderer.invoke("notes", paper),
+  saveNotes: (payload) => ipcRenderer.invoke("save-notes", payload),
   addPapers: (paths) => ipcRenderer.invoke("add-papers", paths),
   choosePapers: () => ipcRenderer.invoke("choose-papers"),
   // Electron 32+ dropped File.path; this is the supported way to learn where

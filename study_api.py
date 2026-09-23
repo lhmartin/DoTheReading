@@ -138,6 +138,7 @@ def load_papers(base: Path, history: QuizHistory) -> list[dict]:
             })
         seen = [q for q in questions if q["attempts"]]
         info = cached_info(stem) or {}
+        from qa_format import read_notes
         papers.append({
             "stem": stem,
             "title": parse_title(md_text) or stem,
@@ -153,6 +154,7 @@ def load_papers(base: Path, history: QuizHistory) -> list[dict]:
                 "review": sum(1 for q in questions if q["needs_review"]),
             },
             "last_studied": max((q["last_seen"] for q in seen), default=None),
+            "notes": read_notes(md_text),
         })
     return papers
 
@@ -301,7 +303,7 @@ def cmd_process_inbox(args) -> dict:
 
     process_inbox.log = streaming_log
     try:
-        problem = process_inbox.main()
+        problem = process_inbox.main(only=args.only)
         return {"ok": not problem, "error": problem or ""}
     except SystemExit as e:  # e.g. Ollama stopped mid-run
         return {"ok": False, "error": str(e)}
@@ -498,6 +500,58 @@ def remove_from_inbox(base: Path, name: str) -> dict:
         return {"ok": False, "error": "That paper isn't in the queue any more."}
     target.unlink()
     return {"ok": True, "removed": name}
+
+
+def shelve_without_questions(base: Path, name: str) -> dict:
+    """Move a queued paper straight to the library to read, no questions.
+
+    The library is built from the question files, so it gets one — with a
+    title and no questions — which is also where its notes will live.
+    """
+    import article
+    from qa_format import render_markdown
+
+    source = (base / "inbox" / name).resolve()
+    inbox = (base / "inbox").resolve()
+    if inbox not in source.parents or source.suffix.lower() not in INBOX_SUFFIXES or not source.exists():
+        return {"ok": False, "error": "That isn't a queued paper."}
+
+    title = readable_title(source)
+    library = base / "library"
+    questions_dir = base / "questions"
+    library.mkdir(parents=True, exist_ok=True)
+    questions_dir.mkdir(parents=True, exist_ok=True)
+    questions_path = questions_dir / f"{source.stem}_questions.md"
+    if not questions_path.exists():
+        questions_path.write_text(
+            render_markdown(title, [], note=f"{name} · added for reading; no questions generated."),
+            encoding="utf-8")
+    shutil.move(str(source), str(library / source.name))
+    return {"ok": True, "title": title, "stem": source.stem}
+
+
+def cmd_shelve(args) -> dict:
+    return shelve_without_questions(base_dir(args), args.name)
+
+
+def cmd_notes(args) -> dict:
+    from qa_format import read_notes
+
+    path = base_dir(args) / "questions" / f"{args.paper}_questions.md"
+    if not path.exists():
+        return {"ok": False, "error": "No question file for that paper."}
+    return {"ok": True, "paper": args.paper, "notes": read_notes(path.read_text(encoding="utf-8"))}
+
+
+def cmd_save_notes(args) -> dict:
+    from qa_format import write_notes
+
+    path = base_dir(args) / "questions" / f"{args.paper}_questions.md"
+    if not path.exists():
+        return {"ok": False, "error": "No question file for that paper."}
+    text = Path(args.text_file).read_text(encoding="utf-8", errors="replace") if args.text_file else ""
+    path.write_text(write_notes(path.read_text(encoding="utf-8"), text), encoding="utf-8")
+    return {"ok": True, "paper": args.paper, "characters": len(text.strip())}
 
 
 def cmd_remove_paper(args) -> dict:
@@ -853,7 +907,8 @@ def main():
     grade.add_argument("--evidence", default="")
     grade.add_argument("--model", default="")
 
-    sub.add_parser("process-inbox")
+    run_now = sub.add_parser("process-inbox")
+    run_now.add_argument("--only", nargs="*", help="file names to process; default is everything queued")
     sub.add_parser("settings")
     sub.add_parser("environment")
 
@@ -866,6 +921,16 @@ def main():
     add_link.add_argument("--url", required=True)
     add_link.add_argument("--html-file", dest="html_file", help="use this rendered HTML instead of fetching")
     add_link.add_argument("--dry-run", dest="dry_run", action="store_true", help="extract but don't save")
+
+    shelve = sub.add_parser("shelve")
+    shelve.add_argument("--name", required=True)
+
+    notes = sub.add_parser("notes")
+    notes.add_argument("--paper", required=True)
+
+    save_notes_cmd = sub.add_parser("save-notes")
+    save_notes_cmd.add_argument("--paper", required=True)
+    save_notes_cmd.add_argument("--text-file", dest="text_file", default="")
 
     remove = sub.add_parser("remove-paper")
     remove.add_argument("--name", required=True)
@@ -898,7 +963,8 @@ def main():
                 "process-inbox": cmd_process_inbox, "settings": cmd_settings,
                 "save-settings": cmd_save_settings, "environment": cmd_environment,
                 "pull-model": cmd_pull_model, "schedule": cmd_schedule,
-                "add-papers": cmd_add_papers, "add-url": cmd_add_url, "add-text": cmd_add_text, "remove-paper": cmd_remove_paper, "ollama-memory": cmd_ollama_memory,
+                "add-papers": cmd_add_papers, "add-url": cmd_add_url, "add-text": cmd_add_text, "remove-paper": cmd_remove_paper, "shelve": cmd_shelve,
+                "notes": cmd_notes, "save-notes": cmd_save_notes, "ollama-memory": cmd_ollama_memory,
                 "start-ollama": cmd_start_ollama, "power": cmd_power, "paper-info": cmd_paper_info}
     try:
         result = commands[args.command](args)

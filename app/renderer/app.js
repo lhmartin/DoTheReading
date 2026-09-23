@@ -121,8 +121,9 @@ function shelfCard(paper) {
   const { total, seen, correct, review } = paper.counts;
   const facts = [
     paper.pages ? `${paper.pages} pages` : "",
-    `${plural(total, "question")}`,
-    seen ? `${correct}/${seen} right` : "not studied yet",
+    total ? `${plural(total, "question")}` : "no questions — for reading",
+    total && seen ? `${correct}/${seen} right` : "",
+    paper.notes ? "has notes" : "",
     review ? `${review} to review` : "",
   ].filter(Boolean);
   const added = new Date(paper.added).toLocaleDateString(undefined, { day: "numeric", month: "short" });
@@ -166,7 +167,8 @@ function renderQueue() {
               <span class="tag">${Math.max(1, Math.round(paper.size_bytes / 1e5) / 10)} MB</span>
             </div>
           </div>
-          <button class="btn" data-study-queue="${escapeHtml(paper.name)}" disabled title="No questions yet">Study</button>
+          <button class="btn" data-process="${escapeHtml(paper.name)}" title="Write questions for this one now">Process</button>
+          <button class="btn" data-shelve="${escapeHtml(paper.name)}" title="Keep it to read, without questions">Just read</button>
           <button class="btn btn--remove" data-remove="${escapeHtml(paper.name)}" title="Remove from the queue">Remove</button>
         </article>`).join("")
     : "";
@@ -209,7 +211,11 @@ function renderInbox() {
   $("inbox-list").innerHTML = inbox.length
     ? inbox.map((paper) => `<li>
         <span>${escapeHtml(paper.title)}</span>
-        <button class="btn btn--remove" data-remove="${escapeHtml(paper.name)}">Remove</button>
+        <span class="row" style="margin:0;gap:8px">
+          <button class="btn" data-process="${escapeHtml(paper.name)}">Process</button>
+          <button class="btn" data-shelve="${escapeHtml(paper.name)}" title="Keep it to read, without questions">Just read</button>
+          <button class="btn btn--remove" data-remove="${escapeHtml(paper.name)}">Remove</button>
+        </span>
       </li>`).join("")
     : `<li class="empty">Nothing waiting — drag PDFs onto the window, paste a link, or use Add PDFs…</li>`;
   const pip = $("inbox-pip");
@@ -378,6 +384,50 @@ async function addPastedText() {
   refresh();
 }
 
+// Notes live in the paper's question file, so they're there next time.
+async function loadNotes(paper) {
+  state.notesPaper = paper;
+  const box = $("notes-text");
+  box.value = "";
+  $("notes-state").textContent = "";
+  try {
+    const result = await window.study.notes(paper);
+    if (result.ok && state.notesPaper === paper) box.value = result.notes;
+  } catch {
+    // no question file yet; the panel just stays empty
+  }
+}
+
+function queueNotesSave() {
+  clearTimeout(state.notesTimer);
+  $("notes-state").textContent = "";
+  state.notesTimer = setTimeout(saveNotes, 1200);
+}
+
+async function saveNotes() {
+  const paper = state.notesPaper;
+  if (!paper) return;
+  const text = $("notes-text").value;
+  try {
+    const result = await window.study.saveNotes({ paper, text });
+    if (!result.ok) throw new Error(result.error);
+    $("notes-state").textContent = "· saved";
+  } catch (err) {
+    $("notes-state").textContent = `· not saved (${err.message})`;
+  }
+}
+
+async function shelveWithoutQuestions(name) {
+  try {
+    const result = await window.study.shelve(name);
+    if (!result.ok) throw new Error(result.error);
+    toast(`${result.title} is in your library to read`);
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+  refresh();
+}
+
 async function removeFromQueue(name) {
   try {
     const result = await window.study.removePaper(name);
@@ -404,7 +454,7 @@ async function offerClipboardUrl() {
   }
 }
 
-async function runInbox() {
+async function runInbox(only) {
   // Check the model is there before starting: a run that can't work takes
   // minutes to say so otherwise.
   try {
@@ -423,13 +473,14 @@ async function runInbox() {
     return toast(err.message, 8000);
   }
 
+  if (only && only.length) show("inbox");
   state.runProgress = { papers: 0, done: 0 };
   state.runActivity = activity("run");
   state.runActivity.start("Starting…");
   $("run-inbox").disabled = true;
   $("run-note").textContent = "";
   try {
-    const result = await window.study.processInbox();
+    const result = await window.study.processInbox(only);
     if (result && result.ok === false) throw new Error(result.error || "the run stopped early");
     const { done } = state.runProgress;
     state.runActivity.finish(done ? `Done — ${plural(done, "paper")} ready to study` : "Nothing to process");
@@ -671,6 +722,7 @@ async function setSchedule(action) {
 
 function startSession(items, title) {
   if (!items.length) return toast("No questions there yet");
+  loadNotes(items[0].paper);
   state.session = { items, index: 0, results: [], title };
   show("study");
   $("quiz-done").hidden = true;
@@ -681,6 +733,17 @@ function startSession(items, title) {
 function startPaper(stem) {
   const paper = paperByStem(stem);
   if (!paper) return;
+  if (!paper.questions.length) {
+    // Added for reading only: no quiz, but the paper and its notes open.
+    state.session = { items: [{ paper: paper.stem, title: paper.title, pdf: paper.pdf, question: null }],
+                      index: 0, results: [], title: paper.title };
+    show("study");
+    $("quiz-body").hidden = true;
+    $("quiz-done").hidden = true;
+    $("study-title").textContent = paper.title;
+    loadPdf(state.session.items[0]);
+    return loadNotes(paper.stem);
+  }
   startSession(
     paper.questions.map((q) => ({ paper: paper.stem, title: paper.title, pdf: paper.pdf, question: q })),
     paper.title,
@@ -868,6 +931,10 @@ document.addEventListener("click", (event) => {
   if (peek) return togglePeek(peek.dataset.peek);
   const remove = event.target.closest("[data-remove]");
   if (remove) return removeFromQueue(remove.dataset.remove);
+  const process = event.target.closest("[data-process]");
+  if (process) return runInbox([process.dataset.process]);
+  const shelve = event.target.closest("[data-shelve]");
+  if (shelve) return shelveWithoutQuestions(shelve.dataset.shelve);
 });
 
 $("ai-toggle").addEventListener("change", () => {
@@ -984,7 +1051,9 @@ $("add-papers").addEventListener("click", async () => {
   }
 });
 
-$("run-inbox").addEventListener("click", runInbox);
+$("run-inbox").addEventListener("click", () => runInbox());
+$("notes-text").addEventListener("input", queueNotesSave);
+$("notes-text").addEventListener("blur", saveNotes);
 window.study.onProcessLog((line) => {
   if (!state.runActivity) return;
   const update = describeRunLine(line, state.runProgress);
