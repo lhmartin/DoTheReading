@@ -45,3 +45,31 @@ def test_original_file_is_left_alone(base, tmp_path):
     source = make_pdf_file(tmp_path, "keep.pdf")
     add_papers(base, [source])
     assert (tmp_path / "keep.pdf").exists(), "we copy, never move: the PDF may live in Downloads"
+
+
+def test_remove_takes_a_paper_out_of_the_queue(base, tmp_path):
+    from study_api import remove_from_inbox
+
+    add_papers(base, [make_pdf_file(tmp_path, "unwanted.pdf")])
+    assert remove_from_inbox(base, "unwanted.pdf") == {"ok": True, "removed": "unwanted.pdf"}
+    assert not (base / "inbox" / "unwanted.pdf").exists()
+
+
+def test_remove_works_for_saved_articles(base):
+    from study_api import remove_from_inbox
+
+    (base / "inbox").mkdir(exist_ok=True)
+    (base / "inbox" / "post.html").write_text("<html></html>")
+    assert remove_from_inbox(base, "post.html")["ok"]
+
+
+@pytest.mark.parametrize("name", ["../library/precious.pdf", "/etc/passwd", "notes.txt", "gone.pdf"])
+def test_remove_refuses_anything_that_isnt_a_queued_paper(base, name):
+    from study_api import remove_from_inbox
+
+    (base / "inbox").mkdir(exist_ok=True)
+    (base / "library" / "precious.pdf").write_bytes(b"%PDF")
+    (base / "inbox" / "notes.txt").write_text("keep")
+    assert remove_from_inbox(base, name)["ok"] is False
+    assert (base / "library" / "precious.pdf").exists()
+    assert (base / "inbox" / "notes.txt").exists()

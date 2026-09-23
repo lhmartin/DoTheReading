@@ -112,8 +112,9 @@
 
       <!-- Library -->
       <section class="view" id="view-library">
-        <header class="masthead"><p class="eyebrow">Everything processed</p><h1>Library</h1></header>
+        <header class="masthead"><p class="eyebrow">Everything you've added</p><h1>Library</h1></header>
         <div id="library-list" class="stack"></div>
+        <div id="library-queue"></div>
       </section>
 
       <!-- Inbox -->
@@ -126,6 +127,33 @@
             <button class="btn btn--primary" id="add-url">Add</button>
           </div>
           <p class="meta" id="url-note">Web text reads better than a PDF: real sections, no column or hyphen damage. For bioRxiv and arXiv the PDF is fetched too, to read alongside.</p>
+
+          <div class="preview" id="preview" hidden>
+            <p class="eyebrow">Check this looks right before adding</p>
+            <h3 id="preview-title"></h3>
+            <p class="meta" id="preview-meta"></p>
+            <div class="preview-text" id="preview-text"></div>
+            <div class="row">
+              <button class="btn btn--primary" id="preview-add">Add it</button>
+              <button class="btn" id="preview-paste">Paste the text instead</button>
+              <button class="btn btn--ghost" id="preview-cancel">Cancel</button>
+            </div>
+          </div>
+
+          <div class="paste-box" id="paste-box" hidden>
+            <label class="field">
+              <span class="eyebrow">Title</span>
+              <input type="text" id="paste-title" placeholder="What is this article called?" />
+            </label>
+            <label class="field" style="margin-top:12px">
+              <span class="eyebrow">Paste the article text</span>
+              <textarea id="paste-text" rows="8" placeholder="Select the article in your browser, copy, and paste it here…"></textarea>
+            </label>
+            <div class="row">
+              <button class="btn btn--primary" id="paste-add">Add it</button>
+              <button class="btn btn--ghost" id="paste-cancel">Cancel</button>
+            </div>
+          </div>
           <div class="activity" id="url-activity" hidden>
             <span class="spinner" aria-hidden="true"></span>
             <div class="activity-text">

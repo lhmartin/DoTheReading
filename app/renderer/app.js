@@ -149,6 +149,27 @@ function renderLibrary() {
     ? papers.map(shelfCard).join("")
     : `<p class="meta">No processed papers yet. Drag a PDF onto the window to get started.</p>`;
   loadMissingCovers(papers);
+  renderQueue();
+}
+
+function renderQueue() {
+  const queued = state.data.inbox || [];
+  $("library-queue").innerHTML = queued.length
+    ? `<div class="queue-head"><p class="eyebrow">Not processed yet</p>
+         <p class="meta">Questions are written at 02:00, or when you press Process now in the Inbox.</p></div>` +
+      queued.map((paper) => `
+        <article class="queue-row">
+          <div>
+            <h3>${escapeHtml(paper.title)}</h3>
+            <div class="tags">
+              <span class="tag">${paper.kind === "pdf" ? "PDF" : "web article"}</span>
+              <span class="tag">${Math.max(1, Math.round(paper.size_bytes / 1e5) / 10)} MB</span>
+            </div>
+          </div>
+          <button class="btn" data-study-queue="${escapeHtml(paper.name)}" disabled title="No questions yet">Study</button>
+          <button class="btn btn--remove" data-remove="${escapeHtml(paper.name)}" title="Remove from the queue">Remove</button>
+        </article>`).join("")
+    : "";
 }
 
 // Covers are rendered on demand, one at a time, so a big library doesn't
@@ -186,8 +207,11 @@ function togglePeek(stem) {
 function renderInbox() {
   const { inbox } = state.data;
   $("inbox-list").innerHTML = inbox.length
-    ? inbox.map((name) => `<li>${escapeHtml(name)}</li>`).join("")
-    : `<li class="empty">Nothing waiting — drag PDFs onto the window, or use Add PDFs…</li>`;
+    ? inbox.map((paper) => `<li>
+        <span>${escapeHtml(paper.title)}</span>
+        <button class="btn btn--remove" data-remove="${escapeHtml(paper.name)}">Remove</button>
+      </li>`).join("")
+    : `<li class="empty">Nothing waiting — drag PDFs onto the window, paste a link, or use Add PDFs…</li>`;
   const pip = $("inbox-pip");
   pip.hidden = inbox.length === 0;
   pip.textContent = inbox.length;
@@ -268,29 +292,100 @@ function describeRunLine(line, progress) {
   return null; // timings, tracebacks and the like stay in the log file
 }
 
-async function addUrl(url) {
+function hideAddPanels() {
+  $("preview").hidden = true;
+  $("paste-box").hidden = true;
+}
+
+// Extract first and show what we got: a page can look fine and still yield
+// navigation crumbs, so the reader confirms before it joins the queue.
+async function previewUrl(url) {
   if (!url) return;
+  hideAddPanels();
   state.urlActivity = activity("url");
-  state.urlActivity.start("Fetching the article…");
+  state.urlActivity.start("Reading the page…");
   $("add-url").disabled = true;
-  $("url-input").disabled = true;
+
   try {
-    const result = await window.study.addUrl(url);
-    if (!result.ok) throw new Error(result.error || "couldn't add that link");
-    const detail = result.note
-      ? result.note
-      : `${result.characters.toLocaleString()} characters${result.pdf ? ", with the PDF to read" : ""}. ` +
-        "Press Process now when ready.";
-    state.urlActivity.finish(`Added ${result.title}`, detail);
-    $("url-input").value = "";
-    state.dismissedClipUrl = url;
-    $("clip-offer").hidden = true;
+    let result = await window.study.addUrl({ url, dryRun: true });
+    if (!result.ok && result.needs_render) {
+      // A JavaScript-rendered page: run it in a hidden window and retry.
+      state.urlActivity.update({ sub: "the page needs a browser — rendering it…" });
+      const htmlFile = await window.study.renderUrl(url);
+      result = await window.study.addUrl({ url, htmlFile, dryRun: true });
+      state.pendingHtmlFile = htmlFile;
+    }
+    if (!result.ok) throw new Error(result.error || "couldn't read that page");
+    state.pendingUrl = url;
+    showPreview(result);
+    state.urlActivity.finish("Read the page", "Check the preview below.");
   } catch (err) {
-    state.urlActivity.finish("Couldn't add that link", err.message);
+    state.urlActivity.finish("Couldn't read that page", `${err.message} — you can paste the text instead.`);
+    $("paste-box").hidden = false;
   }
   state.urlActivity = null;
   $("add-url").disabled = false;
-  $("url-input").disabled = false;
+}
+
+function showPreview(result) {
+  $("preview").hidden = false;
+  $("preview-title").textContent = result.title;
+  const facts = [
+    result.source === "pdf" ? "the PDF will be used" : `${result.characters.toLocaleString()} characters`,
+    result.headings && result.headings.length ? `${plural(result.headings.length, "section")}` : "",
+    result.note || "",
+  ].filter(Boolean);
+  $("preview-meta").textContent = facts.join(" · ");
+  $("preview-text").textContent = result.preview || "";
+}
+
+async function confirmAdd() {
+  $("preview").hidden = true;
+  state.urlActivity = activity("url");
+  state.urlActivity.start("Adding it…");
+  try {
+    const result = await window.study.addUrl({ url: state.pendingUrl, htmlFile: state.pendingHtmlFile });
+    if (!result.ok) throw new Error(result.error || "couldn't add that link");
+    const detail = result.note || `${result.characters.toLocaleString()} characters` +
+      `${result.pdf ? ", with the PDF to read" : ""}. Press Process now when ready.`;
+    state.urlActivity.finish(`Added ${result.title}`, detail);
+    $("url-input").value = "";
+    state.dismissedClipUrl = state.pendingUrl;
+    $("clip-offer").hidden = true;
+  } catch (err) {
+    state.urlActivity.finish("Couldn't add it", err.message);
+  }
+  state.pendingUrl = state.pendingHtmlFile = null;
+  state.urlActivity = null;
+  refresh();
+}
+
+async function addPastedText() {
+  const text = $("paste-text").value.trim();
+  const title = $("paste-title").value.trim();
+  if (text.length < 500) return toast("Paste the whole article — that's too short to work from", 5000);
+  try {
+    const result = await window.study.addText({ title, text });
+    if (!result.ok) throw new Error(result.error);
+    hideAddPanels();
+    $("paste-text").value = "";
+    $("paste-title").value = "";
+    $("url-input").value = "";
+    toast(`Added ${result.title}`);
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+  refresh();
+}
+
+async function removeFromQueue(name) {
+  try {
+    const result = await window.study.removePaper(name);
+    if (!result.ok) throw new Error(result.error);
+    toast(`Removed ${name}`);
+  } catch (err) {
+    toast(err.message, 8000);
+  }
   refresh();
 }
 
@@ -771,6 +866,8 @@ document.addEventListener("click", (event) => {
   if (study) return startPaper(study.dataset.study);
   const peek = event.target.closest("[data-peek]");
   if (peek) return togglePeek(peek.dataset.peek);
+  const remove = event.target.closest("[data-remove]");
+  if (remove) return removeFromQueue(remove.dataset.remove);
 });
 
 $("ai-toggle").addEventListener("change", () => {
@@ -849,15 +946,26 @@ window.study.onPullLog((line) => {
   );
 });
 
-$("add-url").addEventListener("click", () => addUrl($("url-input").value.trim()));
+$("add-url").addEventListener("click", () => previewUrl($("url-input").value.trim()));
 $("url-input").addEventListener("keydown", (event) => {
-  if (event.key === "Enter") addUrl($("url-input").value.trim());
+  if (event.key === "Enter") previewUrl($("url-input").value.trim());
 });
+$("preview-add").addEventListener("click", confirmAdd);
+$("preview-cancel").addEventListener("click", hideAddPanels);
+$("preview-paste").addEventListener("click", () => {
+  $("preview").hidden = true;
+  $("paste-box").hidden = false;
+  $("paste-title").value = $("preview-title").textContent;
+  $("paste-text").focus();
+});
+$("paste-add").addEventListener("click", addPastedText);
+$("paste-cancel").addEventListener("click", hideAddPanels);
 $("clip-add").addEventListener("click", () => {
   const url = $("clip-url").textContent;
   $("clip-offer").hidden = true;
   show("inbox");
-  addUrl(url);
+  $("url-input").value = url;
+  previewUrl(url);
 });
 $("clip-dismiss").addEventListener("click", () => {
   state.dismissedClipUrl = $("clip-url").textContent;

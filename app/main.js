@@ -3,6 +3,7 @@
 const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
+const os = require("os");
 const fs = require("fs");
 
 const REPO_DIR = path.join(__dirname, "..");
@@ -51,7 +52,11 @@ function callApi(args, onLine) {
     child.stderr.on("data", (data) => (stderr += data));
     child.on("error", (err) => reject(new Error(`Couldn't run Python: ${err.message}`)));
     child.on("close", (code) => {
-      if (last && last.error) reject(new Error(last.error));
+      // A command that reports {ok: false, ...} is telling the caller
+      // something structured (e.g. needs_render); only an unhandled failure
+      // — a bare {error} — is thrown.
+      if (last && last.ok === false) resolve(last);
+      else if (last && last.error) reject(new Error(last.error));
       else if (last) resolve(last);
       else reject(new Error(stderr.trim().split("\n").at(-1) || `the pipeline exited with code ${code}`));
     });
@@ -175,9 +180,42 @@ ipcMain.handle("pull-model", (event, model) =>
   callApi(["pull-model", "--model", model], (line) => event.sender.send("pull-log", line)),
 );
 
-ipcMain.handle("add-url", (event, url) =>
-  callApi(["add-url", "--url", url], (line) => event.sender.send("add-url-log", line)),
-);
+// Many sites render their text in the browser, so the HTML we'd fetch is an
+// empty shell. We already ship Chromium: load the page, let it run, and take
+// the rendered HTML. Written to a temp file so it doesn't ride on argv.
+async function renderPage(url) {
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: { javascript: true, images: false, sandbox: true, contextIsolation: true },
+  });
+  try {
+    await win.loadURL(url, { userAgent: "Mozilla/5.0 (compatible; DoTheReading/1.0)" });
+    await new Promise((done) => setTimeout(done, 1500)); // let late content settle
+    const html = await win.webContents.executeJavaScript("document.documentElement.outerHTML");
+    const file = path.join(os.tmpdir(), `dothereading-${Date.now()}.html`);
+    fs.writeFileSync(file, html, "utf-8");
+    return file;
+  } finally {
+    win.destroy();
+  }
+}
+
+ipcMain.handle("render-url", (_event, url) => renderPage(url));
+
+ipcMain.handle("add-text", (_event, { title, text }) => {
+  const file = path.join(os.tmpdir(), `dothereading-${Date.now()}.txt`);
+  fs.writeFileSync(file, text, "utf-8");
+  return callApi(["add-text", "--title", title || "", "--text-file", file]);
+});
+
+ipcMain.handle("remove-paper", (_event, name) => callApi(["remove-paper", "--name", name]));
+
+ipcMain.handle("add-url", (event, { url, htmlFile, dryRun }) => {
+  const args = ["add-url", "--url", url];
+  if (htmlFile) args.push("--html-file", htmlFile);
+  if (dryRun) args.push("--dry-run");
+  return callApi(args, (line) => event.sender.send("add-url-log", line));
+});
 
 // Offer what's on the clipboard, if it's a link we haven't seen.
 ipcMain.handle("clipboard-url", () => {

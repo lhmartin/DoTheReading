@@ -108,8 +108,9 @@ def build_info(stem: str, pdf_path: Path) -> dict:
 
 def cmd_paper_info(args) -> dict:
     base = base_dir(args)
-    pdf_path = base / "library" / f"{args.paper}.pdf"
-    if not pdf_path.exists():
+    pdf_path = next((p for p in (base / "library" / f"{args.paper}.pdf", base / "inbox" / f"{args.paper}.pdf")
+                     if p.exists()), None)
+    if pdf_path is None:
         return {"paper": args.paper, "info": {"pages": None, "cover": None}}
     return {"paper": args.paper, "info": cached_info(args.paper) or build_info(args.paper, pdf_path)}
 
@@ -186,12 +187,46 @@ def overall_stats(papers: list[dict], history: QuizHistory) -> dict:
     }
 
 
+def queued_papers(base: Path) -> list[dict]:
+    """What's waiting in the inbox, with enough detail to show it in the
+    library beneath the processed papers."""
+    inbox = base / "inbox"
+    if not inbox.is_dir():
+        return []
+    queued = []
+    for path in sorted(inbox.iterdir()):
+        if path.suffix.lower() not in INBOX_SUFFIXES:
+            continue
+        info = cached_info(path.stem) or {}
+        queued.append({
+            "name": path.name,
+            "stem": path.stem,
+            "kind": "pdf" if path.suffix.lower() == ".pdf" else "article",
+            "title": readable_title(path),
+            "size_bytes": path.stat().st_size,
+            "cover": info.get("cover"),
+        })
+    return queued
+
+
+def readable_title(path: Path) -> str:
+    """A title for a queued paper: the saved article's own, else its filename."""
+    if path.suffix.lower() in (".html", ".htm"):
+        try:
+            import article
+
+            got = article.extract_article(path.read_text(encoding="utf-8", errors="replace"))
+            return article.title_from(got, path.stem)
+        except Exception:
+            pass
+    return path.stem.replace("_", " ").replace("-", " ")
+
+
 def cmd_library(args) -> dict:
     base = base_dir(args)
     history = QuizHistory(base / "quiz_history.json")
     papers = load_papers(base, history)
-    inbox = (sorted(p.name for p in (base / "inbox").iterdir() if p.suffix.lower() in INBOX_SUFFIXES)
-             if (base / "inbox").is_dir() else [])
+    inbox = queued_papers(base)
     review = [{"paper": e["paper"], "question": e["question"], "key": question_key(e["paper"], e["question"])}
               for e in history.review_pile()]
     return {
@@ -343,7 +378,25 @@ def save_pdf_to_inbox(base: Path, pdf_url: str, slug: str, log=lambda m: None) -
     return True
 
 
-def add_url(base: Path, url: str, log=lambda m: None) -> dict:
+def preview_of(text: str, limit: int = 1500) -> str:
+    return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + "…"
+
+
+def add_text(base: Path, title: str, text: str) -> dict:
+    """Save text the reader supplied themselves (pasted, or rendered by the
+    app) as an article to process."""
+    import article
+
+    title = title.strip() or "Pasted article"
+    slug = article.slug_for("https://pasted.local/" + title, title)
+    inbox = base / "inbox"
+    inbox.mkdir(parents=True, exist_ok=True)
+    (inbox / f"{slug}.html").write_text(article.as_reader_html(title, text, ""), encoding="utf-8")
+    return {"ok": True, "title": title, "slug": slug, "characters": len(text), "pdf": False}
+
+
+def add_url(base: Path, url: str, log=lambda m: None, html: str | None = None,
+            dry_run: bool = False) -> dict:
     """Fetch an article, save it for processing, and keep the PDF to read
     when the source has one (bioRxiv, arXiv)."""
     import article
@@ -354,31 +407,41 @@ def add_url(base: Path, url: str, log=lambda m: None) -> dict:
         return {"ok": False, "error": "That doesn't look like a web address."}
 
     sources = article.canonical_sources(url)
-    log("fetching the page…")
-    try:
-        response = fetch_with_retry(sources["text_url"], log=log)
-    except requests.exceptions.RequestException as e:
-        status = getattr(getattr(e, "response", None), "status_code", None)
-        # A rate-limited site often still serves its PDF, which we can process.
-        if sources["pdf_url"]:
-            log("the site wouldn't serve its text — trying the PDF instead…")
-            slug = article.slug_for(url, None)
-            if save_pdf_to_inbox(base, sources["pdf_url"], slug, log=log):
-                return {"ok": True, "title": slug, "slug": slug, "characters": 0, "pdf": True,
-                        "note": "That site is rate-limiting us, so the PDF was added instead. "
-                                "Adding the link again later gets the cleaner web text."}
-        if status in RETRY_STATUSES:
-            return {"ok": False, "error": "That site is rate-limiting us. Wait a minute and try again."}
-        return {"ok": False, "error": f"Couldn't fetch that page: {e}"}
+    page_html = html
+    if page_html is None:
+        log("fetching the page…")
+        try:
+            page_html = fetch_with_retry(sources["text_url"], log=log).text
+        except requests.exceptions.RequestException as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            # A rate-limited site often still serves its PDF, which we can process.
+            if sources["pdf_url"] and not dry_run:
+                log("the site wouldn't serve its text — trying the PDF instead…")
+                slug = article.slug_for(url, None)
+                if save_pdf_to_inbox(base, sources["pdf_url"], slug, log=log):
+                    return {"ok": True, "title": slug, "slug": slug, "characters": 0, "pdf": True,
+                            "note": "That site is rate-limiting us, so the PDF was added instead. "
+                                    "Adding the link again later gets the cleaner web text."}
+            if status in RETRY_STATUSES:
+                return {"ok": False, "error": "That site is rate-limiting us. Wait a minute and try again."}
+            return {"ok": False, "error": f"Couldn't fetch that page: {e}"}
 
-    got = article.extract_article(response.text)
+    got = article.extract_article(page_html)
     if len(got["text"]) < 1000:
-        return {"ok": False, "error": "Couldn't find an article on that page — try the PDF instead."}
+        # Most likely a JavaScript-rendered page: nothing to read in the HTML
+        # itself. The app can render it and try again.
+        return {"ok": False, "needs_render": html is None,
+                "error": "That page needs a browser to render it — nothing readable in the HTML."}
 
     # bioRxiv serves the abstract page when a paper has no full text; the PDF
     # is then the only way to read the whole thing.
     if len(got["text"]) < MIN_FULL_TEXT and sources["pdf_url"]:
         slug = article.slug_for(url, article.title_from(got, url))
+        if dry_run:
+            return {"ok": True, "dry_run": True, "title": article.title_from(got, url), "slug": slug,
+                    "characters": len(got["text"]), "source": "pdf", "headings": [],
+                    "preview": preview_of(got["text"]),
+                    "note": "Only the abstract is published as web text, so the PDF will be used."}
         log("that page only has the abstract — fetching the PDF instead…")
         if save_pdf_to_inbox(base, sources["pdf_url"], slug, log=log):
             return {"ok": True, "title": article.title_from(got, url), "slug": slug,
@@ -387,6 +450,10 @@ def add_url(base: Path, url: str, log=lambda m: None) -> dict:
 
     title = article.title_from(got, url)
     slug = article.slug_for(url, title)
+    if dry_run:
+        return {"ok": True, "dry_run": True, "title": title, "slug": slug, "source": "web",
+                "characters": len(got["text"]), "preview": preview_of(got["text"]),
+                "headings": [b[3:] for b in got["text"].split("\n\n") if b.startswith("## ")][:12]}
     inbox = base / "inbox"
     inbox.mkdir(parents=True, exist_ok=True)
     (inbox / f"{slug}.html").write_text(article.as_reader_html(title, got["text"], url), encoding="utf-8")
@@ -409,7 +476,32 @@ def add_url(base: Path, url: str, log=lambda m: None) -> dict:
 
 
 def cmd_add_url(args) -> dict:
-    return add_url(base_dir(args), args.url, log=lambda m: print(json.dumps({"log": m}), flush=True))
+    html = Path(args.html_file).read_text(encoding="utf-8", errors="replace") if args.html_file else None
+    return add_url(base_dir(args), args.url, log=lambda m: print(json.dumps({"log": m}), flush=True),
+                   html=html, dry_run=bool(args.dry_run))
+
+
+def cmd_add_text(args) -> dict:
+    text = Path(args.text_file).read_text(encoding="utf-8", errors="replace")
+    if len(text.strip()) < 500:
+        return {"ok": False, "error": "That's too short to make questions from — paste the whole article."}
+    return add_text(base_dir(args), args.title, text.strip())
+
+
+def remove_from_inbox(base: Path, name: str) -> dict:
+    """Drop a queued paper. Only touches files inside the inbox."""
+    target = (base / "inbox" / name).resolve()
+    inbox = (base / "inbox").resolve()
+    if inbox not in target.parents or target.suffix.lower() not in INBOX_SUFFIXES:
+        return {"ok": False, "error": "That isn't a queued paper."}
+    if not target.exists():
+        return {"ok": False, "error": "That paper isn't in the queue any more."}
+    target.unlink()
+    return {"ok": True, "removed": name}
+
+
+def cmd_remove_paper(args) -> dict:
+    return remove_from_inbox(base_dir(args), args.name)
 
 
 def cmd_add_papers(args) -> dict:
@@ -772,6 +864,15 @@ def main():
 
     add_link = sub.add_parser("add-url")
     add_link.add_argument("--url", required=True)
+    add_link.add_argument("--html-file", dest="html_file", help="use this rendered HTML instead of fetching")
+    add_link.add_argument("--dry-run", dest="dry_run", action="store_true", help="extract but don't save")
+
+    remove = sub.add_parser("remove-paper")
+    remove.add_argument("--name", required=True)
+
+    add_pasted = sub.add_parser("add-text")
+    add_pasted.add_argument("--title", default="")
+    add_pasted.add_argument("--text-file", dest="text_file", required=True)
 
     add = sub.add_parser("add-papers")
     add.add_argument("--files", nargs="+", required=True)
@@ -797,7 +898,7 @@ def main():
                 "process-inbox": cmd_process_inbox, "settings": cmd_settings,
                 "save-settings": cmd_save_settings, "environment": cmd_environment,
                 "pull-model": cmd_pull_model, "schedule": cmd_schedule,
-                "add-papers": cmd_add_papers, "add-url": cmd_add_url, "ollama-memory": cmd_ollama_memory,
+                "add-papers": cmd_add_papers, "add-url": cmd_add_url, "add-text": cmd_add_text, "remove-paper": cmd_remove_paper, "ollama-memory": cmd_ollama_memory,
                 "start-ollama": cmd_start_ollama, "power": cmd_power, "paper-info": cmd_paper_info}
     try:
         result = commands[args.command](args)

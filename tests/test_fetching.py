@@ -92,4 +92,5 @@ def test_inbox_listing_includes_articles(tmp_path):
     (tmp_path / "inbox" / "article.html").write_text("<html></html>")
     (tmp_path / "inbox" / "notes.txt").write_text("ignore me")
     listing = study_api.cmd_library(argparse.Namespace(base=str(tmp_path)))
-    assert sorted(listing["inbox"]) == ["article.html", "paper.pdf"]
+    assert [q["name"] for q in listing["inbox"]] == ["article.html", "paper.pdf"]
+    assert [q["kind"] for q in listing["inbox"]] == ["article", "pdf"]
