@@ -55,6 +55,34 @@ def log(message: str):
         f.write(line + "\n")
 
 
+def write_questions_for(source: Path, config: dict, log=print) -> str | None:
+    """Read one paper and write its question file. Returns None on success,
+    or a reason it couldn't be done. Used by the nightly run and by the app
+    when questions are asked for after the fact."""
+    QUESTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    questions_path = QUESTIONS_DIR / (source.stem + "_questions.md")
+
+    text = extract_any(str(source), log=log)
+    if not text.strip():
+        return f"no extractable text in {source.name}, even after OCR"
+
+    title = (text.split("\n\n")[0].removeprefix("## ").strip() if source.suffix.lower() != ".pdf"
+             else find_title(str(source), text, config["model"], log=log)) or source.stem
+    log(f"    title: {title}")
+
+    progress = Checkpoint(source.stem, text)
+    questions, summary = generate_questions(text, config["model"], config["num_questions"],
+                                            log=log, guidance=config["guidance"], checkpoint=progress)
+    if not questions:
+        return f"no questions passed verification for {source.name}"
+
+    questions_path.write_text(
+        render_keeping_notes(questions_path, title, questions, f"{source.name} · {summary}"),
+        encoding="utf-8")
+    progress.clear()
+    return None
+
+
 def main(only: list[str] | None = None) -> str | None:
     """Process the inbox. `only` limits the run to those file names.
 
@@ -88,27 +116,11 @@ def main(only: list[str] | None = None) -> str | None:
 
         log(f"Processing {pdf_path.name}...")
         try:
-            text = extract_any(str(pdf_path), log=log)
-            if not text.strip():
-                log(f"  WARNING: no extractable text in {pdf_path.name}, even after OCR. Skipping.")
+            problem = write_questions_for(pdf_path, config, log=log)
+            if problem:
+                log(f"  WARNING: {problem}. Leaving it in the inbox.")
                 continue
 
-            # A saved article already carries its title as the first heading.
-            title = (text.split("\n\n")[0].removeprefix("## ").strip() if pdf_path.suffix.lower() != ".pdf"
-                     else find_title(str(pdf_path), text, config["model"], log=log)) or pdf_path.stem
-            log(f"    title: {title}")
-            progress = Checkpoint(pdf_path.stem, text)
-            questions, summary = generate_questions(text, config["model"], config["num_questions"],
-                                                    log=log, guidance=config["guidance"],
-                                                    checkpoint=progress)
-            if not questions:
-                log(f"  WARNING: no questions passed verification for {pdf_path.name}. Leaving it in the inbox.")
-                continue
-            note = f"{pdf_path.name} · {summary}"
-            questions_path.write_text(render_keeping_notes(questions_path, title, questions, note),
-                                      encoding="utf-8")
-
-            progress.clear()
             shutil.move(str(pdf_path), str(LIBRARY_DIR / pdf_path.name))
             log(f"  Done. Questions saved, PDF moved to library.")
         except Exception:

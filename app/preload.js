@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld("study", {
   grade: (payload) => ipcRenderer.invoke("grade", payload),
   processInbox: (only) => ipcRenderer.invoke("process-inbox", only),
   shelve: (name) => ipcRenderer.invoke("shelve", name),
+  writeQuestions: (payload) => ipcRenderer.invoke("write-questions", payload),
+  markRead: (payload) => ipcRenderer.invoke("mark-read", payload),
   notes: (paper) => ipcRenderer.invoke("notes", paper),
   saveNotes: (payload) => ipcRenderer.invoke("save-notes", payload),
   addPapers: (paths) => ipcRenderer.invoke("add-papers", paths),

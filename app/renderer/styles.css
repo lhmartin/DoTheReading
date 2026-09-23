@@ -707,3 +707,75 @@ blockquote p {
 #notes-text:focus { outline: 2px solid var(--gold); outline-offset: -1px; }
 .tag--notes { border-color: var(--gold); color: var(--gold); }
 
+
+/* ---- reading activity grid ---------------------------------------------
+   A calendar heatmap: magnitude over time, so one hue stepped light to dark
+   (the app's oxblood), never a rainbow. Days with nothing read stay at the
+   paper tone so the grid recedes. */
+
+.heatmap {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 13px);
+  gap: 3px;
+  margin-top: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.heatmap .cell, .heatmap-key .cell {
+  width: 13px; height: 13px;
+  border-radius: 2px;
+  background: var(--level-0);
+}
+.cell.level-0 { background: #e7e0d0; }
+.cell.level-1 { background: #e3bfae; }
+.cell.level-2 { background: #cf8a72; }
+.cell.level-3 { background: #a4483c; }
+.cell.level-4 { background: #7d2b22; }
+.heatmap .cell { cursor: default; transition: outline-color 120ms ease; outline: 2px solid transparent; }
+.heatmap .cell:hover { outline-color: var(--ink); }
+.heatmap .cell--empty { background: transparent; }
+
+.heatmap-key { display: flex; align-items: center; gap: 5px; margin-top: 14px; }
+.heatmap-key .meta { margin: 0 4px; }
+
+.heat-tip {
+  position: fixed;
+  z-index: 30;
+  max-width: 280px;
+  padding: 10px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 3px;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+.heat-tip b { font-weight: 400; color: #fff; }
+.heat-tip div + div { margin-top: 5px; }
+.heat-tip ul { margin: 6px 0 0; padding-left: 16px; }
+
+/* ---- nothing to quiz ---------------------------------------------------- */
+
+.no-questions {
+  margin: 22px 30px;
+  padding: 20px 22px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--gold);
+  border-radius: 2px;
+}
+.no-questions .meta { max-width: 46ch; }
+.no-questions #new-count {
+  width: 72px;
+  font: inherit;
+  padding: 8px 10px;
+  margin-left: 8px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: #fffdf8;
+  color: var(--ink);
+}
+.btn--read { border-color: var(--moss); color: var(--moss); }
+.tag--read { border-color: var(--moss); color: var(--moss); }

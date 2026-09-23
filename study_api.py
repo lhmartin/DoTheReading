@@ -26,7 +26,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -125,6 +125,9 @@ def load_papers(base: Path, history: QuizHistory) -> list[dict]:
         stem = paper_stem(md_path)
         md_text = md_path.read_text(encoding="utf-8")
         pdf_path = base / "library" / f"{stem}.pdf"
+        # A paper added by URL may have no PDF: its saved article is what we read.
+        article_path = base / "library" / f"{stem}.html"
+        reader = pdf_path if pdf_path.exists() else (article_path if article_path.exists() else None)
         questions = []
         for q in parse_markdown(md_text):
             entry = history.questions.get(question_key(stem, q["question"]), {})
@@ -143,6 +146,8 @@ def load_papers(base: Path, history: QuizHistory) -> list[dict]:
             "stem": stem,
             "title": parse_title(md_text) or stem,
             "pdf": str(pdf_path) if pdf_path.exists() else None,
+            "reader": str(reader) if reader else None,
+            "reader_kind": ("pdf" if reader and reader.suffix == ".pdf" else "article") if reader else None,
             "pages": info.get("pages"),
             "cover": info.get("cover"),
             "added": datetime.fromtimestamp(md_path.stat().st_mtime).isoformat(timespec="seconds"),
@@ -155,6 +160,7 @@ def load_papers(base: Path, history: QuizHistory) -> list[dict]:
             },
             "last_studied": max((q["last_seen"] for q in seen), default=None),
             "notes": read_notes(md_text),
+            "read_at": history.read_at(stem),
         })
     return papers
 
@@ -168,6 +174,29 @@ def suggest(papers: list[dict]) -> str | None:
     if fresh:
         return random.choice(fresh)["stem"]
     return min(papers, key=lambda p: p["last_studied"] or "")["stem"]
+
+
+def reading_days(papers: list[dict], history: QuizHistory, days: int = 182) -> list[dict]:
+    """One entry per day for the activity grid: what was read, and how many
+    questions were answered."""
+    titles = {paper["stem"]: paper["title"] for paper in papers}
+    by_day: dict[str, dict] = {}
+
+    for stem, entry in history.papers.items():
+        when = entry.get("read_at")
+        if when:
+            day = by_day.setdefault(when[:10], {"date": when[:10], "read": [], "answered": 0, "correct": 0})
+            day["read"].append(titles.get(stem, stem))
+
+    for entry in history.questions.values():
+        for attempt in entry["attempts"]:
+            day = by_day.setdefault(attempt["at"][:10],
+                                    {"date": attempt["at"][:10], "read": [], "answered": 0, "correct": 0})
+            day["answered"] += 1
+            day["correct"] += bool(attempt["correct"])
+
+    first = (date.today() - timedelta(days=days)).isoformat()
+    return sorted((day for day in by_day.values() if day["date"] >= first), key=lambda d: d["date"])
 
 
 def overall_stats(papers: list[dict], history: QuizHistory) -> dict:
@@ -185,6 +214,8 @@ def overall_stats(papers: list[dict], history: QuizHistory) -> dict:
         "correct": sum(1 for a, _ in attempts if a["correct"]),
         "review_pile": len(history.review_pile()),
         "by_day": sorted(by_day.values(), key=lambda d: d["date"]),
+        "days": reading_days(papers, history),
+        "papers_read": sum(1 for p in papers if p.get("read_at")),
         "today": date.today().isoformat(),
     }
 
@@ -533,6 +564,53 @@ def shelve_without_questions(base: Path, name: str) -> dict:
 
 def cmd_shelve(args) -> dict:
     return shelve_without_questions(base_dir(args), args.name)
+
+
+def cmd_write_questions(args) -> dict:
+    """Write questions for a paper already in the library (one added for
+    reading, or one you want more questions for)."""
+    base = base_dir(args)
+    import process_inbox
+    import settings as settings_module
+
+    source = next((p for p in (base / "library").glob(f"{args.paper}.*")
+                   if p.suffix.lower() in INBOX_SUFFIXES), None)
+    if source is None:
+        return {"ok": False, "error": "That paper isn't in the library."}
+
+    config = settings_module.load()
+    if args.count:
+        config["num_questions"] = max(1, min(50, int(args.count)))
+    problem = check_model_for(config["model"])
+    if problem:
+        return {"ok": False, "error": problem}
+
+    def log(message):
+        print(json.dumps({"log": message}), flush=True)
+
+    log(f"Processing {source.name}...")
+    try:
+        failure = process_inbox.write_questions_for(source, config, log=log)
+    except SystemExit as e:  # Ollama stopped mid-run
+        return {"ok": False, "error": str(e)}
+    if failure:
+        return {"ok": False, "error": failure}
+    log("  Done. Questions saved.")
+    return {"ok": True, "paper": args.paper, "questions": config["num_questions"]}
+
+
+def check_model_for(model: str) -> str | None:
+    import paper_qa_lib
+
+    return paper_qa_lib.check_model(model)
+
+
+def cmd_mark_read(args) -> dict:
+    base = base_dir(args)
+    history = QuizHistory(base / "quiz_history.json")
+    history.mark_read(args.paper, read=not args.unread)
+    history.save()
+    return {"ok": True, "paper": args.paper, "read_at": history.read_at(args.paper)}
 
 
 def cmd_notes(args) -> dict:
@@ -926,6 +1004,14 @@ def main():
     shelve = sub.add_parser("shelve")
     shelve.add_argument("--name", required=True)
 
+    write_questions = sub.add_parser("write-questions")
+    write_questions.add_argument("--paper", required=True)
+    write_questions.add_argument("--count", type=int, default=0)
+
+    mark_read = sub.add_parser("mark-read")
+    mark_read.add_argument("--paper", required=True)
+    mark_read.add_argument("--unread", action="store_true")
+
     notes = sub.add_parser("notes")
     notes.add_argument("--paper", required=True)
 
@@ -965,7 +1051,8 @@ def main():
                 "save-settings": cmd_save_settings, "environment": cmd_environment,
                 "pull-model": cmd_pull_model, "schedule": cmd_schedule,
                 "add-papers": cmd_add_papers, "add-url": cmd_add_url, "add-text": cmd_add_text, "remove-paper": cmd_remove_paper, "shelve": cmd_shelve,
-                "notes": cmd_notes, "save-notes": cmd_save_notes, "ollama-memory": cmd_ollama_memory,
+                "notes": cmd_notes, "save-notes": cmd_save_notes,
+                "write-questions": cmd_write_questions, "mark-read": cmd_mark_read, "ollama-memory": cmd_ollama_memory,
                 "start-ollama": cmd_start_ollama, "power": cmd_power, "paper-info": cmd_paper_info}
     try:
         result = commands[args.command](args)

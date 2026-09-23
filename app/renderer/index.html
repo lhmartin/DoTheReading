@@ -56,10 +56,11 @@
           <div class="reader-bar">
             <button class="btn btn--ghost" id="leave-study">← Done</button>
             <h2 id="study-title"></h2>
-            <button class="btn btn--ghost" id="open-pdf" title="Open in your PDF app">Open ↗</button>
+            <button class="btn btn--ghost" id="mark-read" title="Mark this paper as read">Mark as read</button>
+            <button class="btn btn--ghost" id="open-pdf" title="Open outside the app">Open ↗</button>
           </div>
           <iframe id="pdf" title="Paper"></iframe>
-          <p class="reader-empty" id="reader-empty" hidden>The PDF isn't in the library folder.</p>
+          <p class="reader-empty" id="reader-empty" hidden>Nothing saved to read for this one — only its questions.</p>
         </div>
 
         <aside class="quiz">
@@ -69,6 +70,26 @@
           </div>
 
           <div class="tab-panel" id="tab-questions">
+          <div class="no-questions" id="no-questions" hidden>
+            <p class="eyebrow">No questions yet</p>
+            <p class="meta">This paper was added for reading, so nothing has been written to quiz you on.
+               Writing questions takes roughly 10–15 minutes.</p>
+            <div class="row">
+              <label class="field--row">
+                <span class="meta">How many</span>
+                <input type="number" id="new-count" min="1" max="50" value="12" />
+              </label>
+              <button class="btn btn--primary" id="write-questions">Write questions</button>
+            </div>
+            <div class="activity" id="write-activity" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <div class="activity-text">
+                <p class="activity-main" id="write-main"></p>
+                <p class="activity-sub" id="write-sub"></p>
+              </div>
+              <div class="activity-bar" id="write-bar" hidden><i></i></div>
+            </div>
+          </div>
           <div class="quiz-progress"><span id="quiz-dots"></span></div>
           <div class="quiz-body" id="quiz-body">
             <p class="eyebrow" id="q-type"></p>
@@ -199,7 +220,18 @@
       <section class="view" id="view-progress">
         <header class="masthead"><p class="eyebrow">Since you started</p><h1>Progress</h1></header>
         <div class="figures" id="figures"></div>
-        <div class="card" id="day-card">
+        <div class="card" id="grid-card">
+          <p class="eyebrow">Reading, day by day</p>
+          <div class="heatmap" id="heatmap"></div>
+          <div class="heatmap-key">
+            <span class="meta">Less</span>
+            <span class="cell level-0"></span><span class="cell level-1"></span>
+            <span class="cell level-2"></span><span class="cell level-3"></span><span class="cell level-4"></span>
+            <span class="meta">More</span>
+          </div>
+        </div>
+
+        <div class="card" id="day-card" style="margin-top:18px">
           <p class="eyebrow">Recent days</p>
           <ul class="days" id="days"></ul>
         </div>

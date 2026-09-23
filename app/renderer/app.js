@@ -124,6 +124,7 @@ function shelfCard(paper) {
     total ? `${plural(total, "question")}` : "no questions — for reading",
     total && seen ? `${correct}/${seen} right` : "",
     paper.notes ? "has notes" : "",
+    paper.read_at ? "read" : "",
     review ? `${review} to review` : "",
   ].filter(Boolean);
   const added = new Date(paper.added).toLocaleDateString(undefined, { day: "numeric", month: "short" });
@@ -384,6 +385,52 @@ async function addPastedText() {
   refresh();
 }
 
+async function writeQuestionsNow() {
+  const paper = state.session?.items[0]?.paper;
+  if (!paper) return;
+  const count = Number($("new-count").value) || 12;
+  state.runProgress = { papers: 0, done: 0 };
+  state.runActivity = activity("write");
+  state.runActivity.start("Reading the paper…");
+  $("write-questions").disabled = true;
+  try {
+    const result = await window.study.writeQuestions({ paper, count });
+    if (!result.ok) throw new Error(result.error || "couldn't write questions");
+    state.runActivity.finish(`${plural(count, "question")} written`, "Reopen the paper to start.");
+    await refresh();
+    startPaper(paper);
+  } catch (err) {
+    state.runActivity.finish("Couldn't write questions", err.message);
+  }
+  state.runActivity = null;
+  $("write-questions").disabled = false;
+}
+
+async function toggleRead() {
+  const paper = state.session?.items[0]?.paper;
+  if (!paper) return;
+  const wasRead = Boolean(paperByStem(paper)?.read_at);
+  try {
+    const result = await window.study.markRead({ paper, unread: wasRead });
+    if (!result.ok) throw new Error(result.error);
+    toast(wasRead ? "Marked as unread" : "Marked as read");
+    await refresh();
+    showReadState(paper);
+  } catch (err) {
+    toast(err.message, 8000);
+  }
+}
+
+function showReadState(paper) {
+  const readAt = paperByStem(paper)?.read_at;
+  const button = $("mark-read");
+  button.textContent = readAt ? "Read ✓" : "Mark as read";
+  button.classList.toggle("btn--read", Boolean(readAt));
+  button.title = readAt
+    ? `Read on ${new Date(readAt).toLocaleDateString()} — click to undo`
+    : "Mark this paper as read";
+}
+
 function showTab(name) {
   for (const tab of document.querySelectorAll(".tab")) {
     tab.classList.toggle("is-active", tab.dataset.tab === name);
@@ -549,11 +596,65 @@ window.addEventListener("drop", (event) => {
 
 // ---- progress -----------------------------------------------------------
 
+// A calendar heatmap of what you read. Intensity is papers read that day,
+// with questions answered as a lesser signal, so a day of revision still
+// shows. The tooltip names the papers, which is the part worth having.
+function heatLevel(day) {
+  const weight = (day.read?.length || 0) * 2 + (day.answered ? 1 : 0);
+  if (!weight) return 0;
+  return Math.min(4, weight <= 1 ? 1 : weight <= 3 ? 2 : weight <= 6 ? 3 : 4);
+}
+
+function renderHeatmap(days) {
+  const byDate = new Map(days.map((day) => [day.date, day]));
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(start.getDate() - 181);
+  start.setDate(start.getDate() - start.getDay()); // begin on a Sunday, like a calendar
+
+  const cells = [];
+  for (let day = new Date(start); day <= today; day.setDate(day.getDate() + 1)) {
+    const date = day.toISOString().slice(0, 10);
+    const entry = byDate.get(date);
+    cells.push(`<span class="cell level-${entry ? heatLevel(entry) : 0}" data-date="${date}"></span>`);
+  }
+  $("heatmap").innerHTML = cells.join("");
+}
+
+function heatTooltip(cell) {
+  const date = cell.dataset.date;
+  const day = (state.data?.stats?.days || []).find((d) => d.date === date);
+  const when = new Date(date + "T12:00:00").toLocaleDateString(undefined,
+    { weekday: "long", day: "numeric", month: "long" });
+  const lines = [`<b>${when}</b>`];
+  if (day && day.read.length) {
+    lines.push(`${plural(day.read.length, "paper")} read:` +
+      `<ul>${day.read.map((title) => `<li>${escapeHtml(title)}</li>`).join("")}</ul>`);
+  }
+  if (day && day.answered) lines.push(`${day.correct}/${day.answered} questions right`);
+  if (!day || (!day.read.length && !day.answered)) lines.push("Nothing that day");
+
+  const tip = document.createElement("div");
+  tip.className = "heat-tip";
+  tip.innerHTML = lines.map((line) => `<div>${line}</div>`).join("");
+  document.body.appendChild(tip);
+  const box = cell.getBoundingClientRect();
+  tip.style.left = `${Math.min(box.left, window.innerWidth - tip.offsetWidth - 12)}px`;
+  tip.style.top = `${Math.max(8, box.top - tip.offsetHeight - 8)}px`;
+  state.heatTip = tip;
+}
+
+function hideHeatTooltip() {
+  state.heatTip?.remove();
+  state.heatTip = null;
+}
+
 function renderProgress() {
   const s = state.data.stats;
   const accuracy = s.answered ? Math.round((s.correct / s.answered) * 100) : 0;
   $("figures").innerHTML = [
-    [s.papers_studied + " / " + s.papers, "Papers studied"],
+    [s.papers_read + " / " + s.papers, "Papers read"],
+    [s.papers_studied, "Quizzed"],
     [s.answered, "Questions answered"],
     [accuracy + "%", "Answered right"],
     [s.review_pile, "In review pile"],
@@ -561,6 +662,7 @@ function renderProgress() {
     .map(([value, label]) => `<div class="figure"><b>${value}</b><span>${label}</span></div>`)
     .join("");
 
+  renderHeatmap(s.days || []);
   const days = s.by_day.slice(-10).reverse();
   const most = Math.max(1, ...days.map((d) => d.answered));
   $("day-card").hidden = days.length === 0;
@@ -736,6 +838,8 @@ async function setSchedule(action) {
 function startSession(items, title) {
   if (!items.length) return toast("No questions there yet");
   loadNotes(items[0].paper);
+  showReadState(items[0].paper);
+  $("no-questions").hidden = true;
   showTab("questions");
   state.session = { items, index: 0, results: [], title };
   show("study");
@@ -749,18 +853,23 @@ function startPaper(stem) {
   if (!paper) return;
   if (!paper.questions.length) {
     // Added for reading only: no quiz, but the paper and its notes open.
-    state.session = { items: [{ paper: paper.stem, title: paper.title, pdf: paper.pdf, question: null }],
+    state.session = { items: [{ paper: paper.stem, title: paper.title, reader: paper.reader,
+                               readerKind: paper.reader_kind, question: null }],
                       index: 0, results: [], title: paper.title };
     show("study");
     $("quiz-body").hidden = true;
     $("quiz-done").hidden = true;
+    $("no-questions").hidden = false;  // say so, rather than showing a blank panel
+    $("quiz-dots").innerHTML = "";
     $("study-title").textContent = paper.title;
     loadPdf(state.session.items[0]);
-    showTab("notes");  // nothing to quiz: the notes are the point
+    showReadState(paper.stem);
+    showTab("questions");
     return loadNotes(paper.stem);
   }
   startSession(
-    paper.questions.map((q) => ({ paper: paper.stem, title: paper.title, pdf: paper.pdf, question: q })),
+    paper.questions.map((q) => ({ paper: paper.stem, title: paper.title, reader: paper.reader,
+                                  readerKind: paper.reader_kind, question: q })),
     paper.title,
   );
 }
@@ -770,7 +879,8 @@ function startReview() {
   for (const entry of state.data.review) {
     const paper = paperByStem(entry.paper);
     const question = paper?.questions.find((q) => q.key === entry.key);
-    if (question) items.push({ paper: paper.stem, title: paper.title, pdf: paper.pdf, question });
+    if (question) items.push({ paper: paper.stem, title: paper.title, reader: paper.reader,
+                               readerKind: paper.reader_kind, question });
   }
   startSession(items, "Review pile");
 }
@@ -778,7 +888,7 @@ function startReview() {
 function loadPdf(item, page) {
   const frame = $("pdf");
   const empty = $("reader-empty");
-  if (!item.pdf) {
+  if (!item.reader) {
     frame.hidden = true;
     frame.removeAttribute("src");
     delete frame.dataset.paper;
@@ -789,9 +899,11 @@ function loadPdf(item, page) {
   empty.hidden = true;
   // Only (re)load when the paper changes, or when jumping to a page on
   // request: setting src re-fetches the file and loses the reader's place.
-  const samePaper = frame.dataset.paper === item.pdf;
-  if (samePaper && (!page || String(page) === frame.dataset.page)) return;
-  const url = `file://${item.pdf.replace(/\\/g, "/")}#page=${page || 1}`;
+  const samePaper = frame.dataset.paper === item.reader;
+  if (samePaper && (!page || item.readerKind !== "pdf" || String(page) === frame.dataset.page)) return;
+  // Only a PDF understands #page=; a saved article just loads.
+  const path = item.reader.replace(/\\/g, "/");
+  const url = item.readerKind === "pdf" ? `file://${path}#page=${page || 1}` : `file://${path}`;
 
   // Chromium's PDF viewer ignores a src that differs only by #page=, and
   // clearing src first doesn't make it reload either — so swap in a fresh
@@ -799,7 +911,7 @@ function loadPdf(item, page) {
   const fresh = document.createElement("iframe");
   fresh.id = frame.id;
   fresh.title = frame.title;
-  fresh.dataset.paper = item.pdf;
+  fresh.dataset.paper = item.reader;
   fresh.dataset.page = String(page || 1);
   fresh.src = url;
   frame.replaceWith(fresh);
@@ -829,7 +941,7 @@ function renderQuestion() {
   $("evidence").hidden = !hasEvidence;
   if (hasEvidence) {
     $("e-text").textContent = `“${q.evidence}”`;
-    $("jump").hidden = !q.page || !item.pdf;
+    $("jump").hidden = !q.page || item.readerKind !== "pdf";
     $("e-page").textContent = q.page || "";
   }
 
@@ -968,7 +1080,7 @@ $("jump").addEventListener("click", () => {
 });
 $("open-pdf").addEventListener("click", () => {
   const item = state.session?.items[state.session.index];
-  if (item?.pdf) window.study.openExternal(item.pdf);
+  if (item?.reader) window.study.openExternal(item.reader);
 });
 $("leave-study").addEventListener("click", () => {
   show("today");
@@ -1070,6 +1182,16 @@ $("run-inbox").addEventListener("click", () => runInbox());
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => showTab(tab.dataset.tab));
 });
+$("write-questions").addEventListener("click", writeQuestionsNow);
+$("mark-read").addEventListener("click", toggleRead);
+$("heatmap").addEventListener("mouseover", (event) => {
+  const cell = event.target.closest(".cell");
+  if (cell) {
+    hideHeatTooltip();
+    heatTooltip(cell);
+  }
+});
+$("heatmap").addEventListener("mouseout", hideHeatTooltip);
 $("notes-text").addEventListener("input", queueNotesSave);
 $("notes-text").addEventListener("blur", saveNotes);
 window.study.onProcessLog((line) => {

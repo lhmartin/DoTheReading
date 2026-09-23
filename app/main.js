@@ -209,6 +209,15 @@ ipcMain.handle("add-text", (_event, { title, text }) => {
   return callApi(["add-text", "--title", title || "", "--text-file", file]);
 });
 
+ipcMain.handle("write-questions", (event, { paper, count }) =>
+  callApi(["write-questions", "--paper", paper, ...(count ? ["--count", String(count)] : [])],
+    (line) => event.sender.send("process-log", line)),
+);
+
+ipcMain.handle("mark-read", (_event, { paper, unread }) =>
+  callApi(["mark-read", "--paper", paper, ...(unread ? ["--unread"] : [])]),
+);
+
 ipcMain.handle("shelve", (_event, name) => callApi(["shelve", "--name", name]));
 
 ipcMain.handle("notes", (_event, paper) => callApi(["notes", "--paper", paper]));

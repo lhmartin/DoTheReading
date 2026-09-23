@@ -23,9 +23,11 @@ class QuizHistory:
     def __init__(self, path: Path):
         self.path = path
         self.questions = {}
+        self.papers = {}
         if path.exists():
             data = json.loads(path.read_text(encoding="utf-8"))
             self.questions = data.get("questions", {})
+            self.papers = data.get("papers", {})
 
     def record(self, paper: str, question: str, correct: bool, when: datetime | None = None):
         entry = self.questions.setdefault(question_key(paper, question),
@@ -43,8 +45,20 @@ class QuizHistory:
         pile = [e for e in self.questions.values() if e["attempts"] and not e["attempts"][-1]["correct"]]
         return sorted(pile, key=lambda e: e["attempts"][-1]["at"])
 
+    def mark_read(self, paper: str, read: bool = True, when: datetime | None = None):
+        """Reading a paper is worth recording even when there's no quiz."""
+        entry = self.papers.setdefault(paper, {})
+        if read:
+            entry["read_at"] = (when or datetime.now()).isoformat(timespec="seconds")
+        else:
+            entry.pop("read_at", None)
+
+    def read_at(self, paper: str) -> str | None:
+        return self.papers.get(paper, {}).get("read_at")
+
     def save(self):
         # Write to a temp file and swap it in, so a crash can't corrupt it.
         tmp = self.path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps({"version": 1, "questions": self.questions}, indent=2), encoding="utf-8")
+        tmp.write_text(json.dumps({"version": 1, "questions": self.questions, "papers": self.papers}, indent=2),
+                       encoding="utf-8")
         os.replace(tmp, self.path)
