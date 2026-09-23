@@ -19,7 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # tags and history, for the release notes
+          fetch-depth: 0    # history, for the release notes fallback
+          fetch-tags: true  # and the annotated tag objects themselves
 
       - uses: actions/setup-python@v5
         with:
@@ -119,7 +120,11 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          notes=$(git tag -l --format='%(contents:body)' "${{ github.ref_name }}")
+          # checkout leaves a lightweight ref, so the annotated tag object —
+          # which holds the notes — has to be fetched explicitly. Without
+          # this, %(contents:body) silently returns the commit message.
+          git fetch --force origin "refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}"
+          notes=$(git for-each-ref "refs/tags/${{ github.ref_name }}" --format='%(contents:body)')
           if [ -z "$(echo "$notes" | tr -d '[:space:]')" ]; then
             previous=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || echo "")
             range=${previous:+$previous..}${{ github.ref_name }}
