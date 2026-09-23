@@ -248,6 +248,11 @@ def call_ollama(prompt: str, model: str, fmt=None) -> str:
         if resp.status_code == 404:
             sys.exit(f"Ollama doesn't have the model '{model}'. Download it in the app's Settings, "
                      f"or run: ollama pull {model}")
+        if "llama-server" in detail or "GGML_ASSERT" in detail:
+            # Ollama's own model server died; nothing here can retry around it.
+            sys.exit("Ollama's model server crashed while running the model. Try turning off the speed "
+                     "settings in Settings and running again; if it keeps happening, re-download the "
+                     "model or update Ollama.")
         sys.exit(f"Ollama returned HTTP {resp.status_code}: {detail}")
     return resp.json()["response"].strip()
 

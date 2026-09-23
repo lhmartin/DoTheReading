@@ -366,6 +366,12 @@ def memory_settings_state(read=None) -> dict:
 OLLAMA_NOT_RUNNING = "Ollama isn't running. Start it from the Start menu (or the button in Settings), then try again."
 
 
+LLAMA_CRASH_HINT = (
+    "Ollama's model server crashed while loading or running the model. Try, in order: "
+    "turn off the speed settings in Settings and retry; re-download the model; update Ollama."
+)
+
+
 def ollama_message(error: Exception) -> str:
     """Ollama's failures in words rather than stack traces."""
     import requests
@@ -438,8 +444,15 @@ def cmd_ollama_memory(args) -> dict:
 
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as key:
         for name, value in OLLAMA_MEMORY_ENV.items():
-            winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
-            os.environ[name] = value
+            if args.action == "clear":
+                try:
+                    winreg.DeleteValue(key, name)
+                except FileNotFoundError:
+                    pass
+                os.environ.pop(name, None)
+            else:
+                winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
+                os.environ[name] = value
     restarted = restart_ollama()
     return {"ok": True, "restarted": restarted, "running": ollama_is_up(),
             "error": "" if restarted else "Settings saved, but Ollama didn't come back up — start it from Settings.",
@@ -518,7 +531,7 @@ def main():
     sub.add_parser("start-ollama")
 
     memory = sub.add_parser("ollama-memory")
-    memory.add_argument("--action", required=True, choices=["check", "set"])
+    memory.add_argument("--action", required=True, choices=["check", "set", "clear"])
 
     schedule = sub.add_parser("schedule")
     schedule.add_argument("--action", required=True, choices=["add", "remove"])

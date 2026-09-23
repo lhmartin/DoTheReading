@@ -37,3 +37,17 @@ def test_start_ollama_is_a_no_op_when_already_up(monkeypatch):
     monkeypatch.setattr(study_api, "ollama_is_up", lambda timeout=2.0: True)
     monkeypatch.setattr(study_api, "ollama_paths", lambda: pytest.fail("shouldn't launch anything"))
     assert study_api.start_ollama() is True
+
+
+def test_llama_server_crash_gets_a_recovery_hint(monkeypatch):
+    import paper_qa_lib
+    from tests.test_verification import FakeResponse
+
+    crash = {"error": "llama-server process has terminated: exit status 0xc0000409: GGML_ASSERT(...) failed"}
+    monkeypatch.setattr(paper_qa_lib.requests, "post", lambda *a, **k: FakeResponse(500, crash))
+    with pytest.raises(SystemExit) as exit_info:
+        paper_qa_lib.call_ollama("prompt", "m")
+    message = str(exit_info.value)
+    assert "model server crashed" in message
+    assert "speed settings" in message and "re-download" in message
+    assert "GGML_ASSERT" not in message

@@ -400,7 +400,14 @@ async function renderSettings() {
     .map(([ok, text]) => `<li class="${ok ? "is-ok" : "is-warn"}">${escapeHtml(text)}</li>`)
     .join("");
   $("ollama-row").hidden = ollama.running;
-  $("memory-row").hidden = !(memory.supported && !memory.ok) || !ollama.running;
+  // Offer to apply the settings, or to undo them: they make the 32B model ~3x
+  // faster, but they change how Ollama loads models, so they're reversible.
+  $("memory-row").hidden = !memory.supported || !ollama.running;
+  $("fix-memory").hidden = memory.ok;
+  $("clear-memory").hidden = !memory.ok;
+  $("memory-note").textContent = memory.ok
+    ? "Turn these off if Ollama's model server keeps crashing."
+    : "Flash attention and an 8-bit context cache keep the 32B model on the GPU (~3x faster).";
   const blocking = !ollama.running || !models.selected_installed;
   $("settings-pip").hidden = !blocking;
 
@@ -702,18 +709,23 @@ $("start-ollama").addEventListener("click", async () => {
   renderSettings();
 });
 
-$("fix-memory").addEventListener("click", async () => {
-  $("fix-memory").disabled = true;
+async function changeMemorySettings(action) {
+  const buttons = [$("fix-memory"), $("clear-memory")];
+  buttons.forEach((b) => (b.disabled = true));
   try {
-    const result = await window.study.ollamaMemory("set");
-    if (!result.ok) throw new Error(result.error || "couldn't apply the settings");
-    toast(result.restarted ? "Applied — Ollama restarted" : result.error, result.restarted ? 3000 : 8000);
+    const result = await window.study.ollamaMemory(action);
+    if (!result.ok) throw new Error(result.error || "couldn't change the settings");
+    const applied = action === "set" ? "Speed settings applied" : "Speed settings turned off";
+    toast(result.restarted ? `${applied} — Ollama restarted` : result.error, result.restarted ? 3000 : 8000);
   } catch (err) {
     toast(err.message, 8000);
   }
-  $("fix-memory").disabled = false;
+  buttons.forEach((b) => (b.disabled = false));
   renderSettings();
-});
+}
+
+$("fix-memory").addEventListener("click", () => changeMemorySettings("set"));
+$("clear-memory").addEventListener("click", () => changeMemorySettings("clear"));
 
 $("schedule-add").addEventListener("click", () => setSchedule("add"));
 $("schedule-remove").addEventListener("click", () => setSchedule("remove"));
