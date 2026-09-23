@@ -18,6 +18,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags and history, for the release notes
 
       - uses: actions/setup-python@v5
         with:
@@ -111,6 +113,24 @@ jobs:
           name: DoTheReading-installer
           path: release/*.exe
 
+      # The annotated tag's message is the release notes: written per release,
+      # not boilerplate. Falls back to the commit subjects since the last tag.
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          notes=$(git tag -l --format='%(contents:body)' "${{ github.ref_name }}")
+          if [ -z "$(echo "$notes" | tr -d '[:space:]')" ]; then
+            previous=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || echo "")
+            range=${previous:+$previous..}${{ github.ref_name }}
+            notes=$(git log --no-merges --format='- %s' "$range")
+          fi
+          {
+            echo "NOTES<<RELEASE_NOTES_EOF"
+            echo "$notes"
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -119,6 +139,12 @@ jobs:
             release/*.exe
             release/SHA256SUMS.txt
           body: |
+            ## What's new
+
+            ${{ env.NOTES }}
+
+            ---
+
             **DoTheReading** — download `DoTheReading-Setup-*.exe` below.
 
             The installer contains the app and the whole Python pipeline, so
