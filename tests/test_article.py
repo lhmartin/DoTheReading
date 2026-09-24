@@ -92,3 +92,32 @@ def test_title_from(page_title, text, expected):
     from article import title_from
 
     assert title_from({"title": page_title, "text": text}, "https://ex.com") == expected
+
+
+ARXIV_ABS = """<html><head><title>[2609.19770v1] TorchCraft: Unified binder design</title>
+<meta name="citation_title" content="TorchCraft: Unified binder design" /></head>
+<body><h1>Computer Science &gt; Artificial Intelligence</h1>
+<h1 class="title"><span class="descriptor">Title:</span>TorchCraft: Unified binder design</h1>
+<blockquote>""" + "An abstract long enough to count as text. " * 5 + """</blockquote></body></html>"""
+
+
+def test_title_prefers_the_citation_title_over_the_first_heading():
+    from article import title_from
+
+    # arXiv's first <h1> is the subject area, not the paper.
+    assert title_from(extract_article(ARXIV_ABS), "https://arxiv.org/abs/2609.19770v1") == \
+        "TorchCraft: Unified binder design"
+
+
+def test_title_trims_the_site_name_from_a_declared_title():
+    from article import title_from
+
+    page = '<html><head><meta property="og:title" content="Why proteins fold | Quanta Magazine"></head>' \
+           "<body><h1>Menu</h1><p>Text.</p></body></html>"
+    assert title_from(extract_article(page), "https://example.org/a") == "Why proteins fold"
+
+
+def test_title_drops_the_arxiv_id_from_the_page_title():
+    from article import title_from
+
+    assert title_from({"title": "[2609.19770v1] TorchCraft", "text": "body"}, "u") == "TorchCraft"

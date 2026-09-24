@@ -33,8 +33,17 @@ class ArticleParser(HTMLParser):
         self._heading: str | None = None
         self.title: str | None = None
         self._in_title = False
+        # The title a page declares for citation managers and link previews.
+        self.meta_title: str | None = None
 
     def handle_starttag(self, tag, attrs):
+        if tag == "meta":
+            meta = dict(attrs)
+            name = (meta.get("name") or meta.get("property") or "").lower()
+            content = " ".join((meta.get("content") or "").split())
+            # citation_title (arXiv, bioRxiv, journals) beats og:title.
+            if content and (name == "citation_title" or (name == "og:title" and not self.meta_title)):
+                self.meta_title = content
         if tag in SKIP_TAGS:
             self._skip_depth += 1
         elif tag == "title":
@@ -87,16 +96,21 @@ def extract_article(page_html: str) -> dict:
     # Drop leftover navigation crumbs: very short lines that aren't headings.
     blocks = [b.strip() for b in text.split("\n\n")]
     blocks = [b for b in blocks if b.startswith("## ") or len(b) > 40]
-    return {"title": parser.title, "text": "\n\n".join(blocks)}
+    return {"title": parser.title, "meta_title": parser.meta_title, "text": "\n\n".join(blocks)}
 
 
 def title_from(extracted: dict, url: str) -> str:
-    """The article's own title: its first heading if it has one, otherwise the
-    page title with the site's name trimmed off ("... | bioRxiv")."""
-    for block in extracted["text"].split("\n\n")[:3]:
-        if block.startswith("## "):
-            return block[3:].strip()
-    title = (extracted.get("title") or url).strip()
+    """The article's own title: the one it declares for citation, else its
+    first heading, else the page title. Declared and page titles often carry
+    the site's name ("... | bioRxiv"), so that is trimmed off."""
+    title = extracted.get("meta_title")
+    if not title:
+        for block in extracted["text"].split("\n\n")[:3]:
+            if block.startswith("## "):
+                return block[3:].strip()
+        title = (extracted.get("title") or url).strip()
+    # arXiv's page title leads with the paper's id: "[2609.19770v1] Title".
+    title = re.sub(r"^\[[\w./-]+\]\s*", "", title)
     # " | Site" and friends are always a site name; after a dash, only a
     # single word is (arXiv, Substack) — real titles use dashes mid-sentence.
     trimmed = re.sub(r"\s*[|\u00b7\u2022]\s*[\w .'&-]{2,24}$", "", title)
