@@ -24,6 +24,46 @@ function applyTheme(choice) {
 }
 applyTheme(storedTheme());
 
+// The rail's wood, also per machine. The tiles (and their thumbnails) are
+// drawn by scripts/make_textures.py, which has the same ids; this list only
+// names them.
+const WOODS = [
+  ["cherry", "Cherry", "warm, soft figure, almost no pores"],
+  ["walnut", "Walnut", "classic, medium figure"],
+  ["walnut-quiet", "Dark walnut", "fine and quiet: tight rings, few pores"],
+  ["walnut-bold", "Black walnut", "bold figure: wide arches, strong contrast"],
+  ["burl", "Walnut burl", "swirling figure and dark eyes"],
+  ["mahogany", "Ribbon mahogany", "straight, glossy stripes"],
+  ["rosewood", "Rosewood", "purple-brown with black veins"],
+  ["teak", "Teak", "golden, with dark streaks"],
+  ["maple", "Maple", "pale honey, fine and even"],
+  ["ash", "Ash", "blond, with bold open grain"],
+  ["oak-quarter", "Quartersawn oak", "straight grain and pale ray flecks"],
+  ["zebrano", "Zebrano", "loud, hard-edged stripes"],
+  ["bog-oak", "Smoked bog oak", "cool grey-brown"],
+  ["wenge", "Wenge", "near-black, with pale threads"],
+];
+
+function woodUrl(id, thumb = false) {
+  return `textures/woods/${thumb ? "thumbs/" : ""}${id}.jpg`;
+}
+
+function storedWood() {
+  let id = "cherry";
+  try { id = localStorage.getItem("dtr:wood") || id; } catch { /* the default, then */ }
+  return WOODS.some(([w]) => w === id) ? id : "cherry";
+}
+
+function applyWood(id) {
+  const [, name, about] = WOODS.find(([w]) => w === id);
+  document.documentElement.style.setProperty("--wood-tile", `url("${woodUrl(id)}")`);
+  for (const swatch of document.querySelectorAll("[data-wood]")) {
+    swatch.setAttribute("aria-checked", String(swatch.dataset.wood === id));
+  }
+  const label = $("wood-name");
+  if (label) label.innerHTML = `<b>${name}</b> · ${about}`;
+}
+
 const LEVEL_LABELS = {
   overview: "Overview", approach: "Approach", evidence: "Evidence", critique: "Critique",
 };
@@ -86,6 +126,7 @@ async function refresh() {
   renderLibrary();
   renderInbox();
   renderProgress();
+  renderStreak();
 }
 
 // ---- today --------------------------------------------------------------
@@ -97,8 +138,6 @@ function renderToday() {
   });
 
   const paper = paperByStem(suggested);
-  const card = $("suggested-card");
-  card.classList.toggle("feature--empty", !paper);
   if (paper) {
     $("suggested-title").textContent = paper.title;
     const { total, seen, correct } = paper.counts;
@@ -111,8 +150,6 @@ function renderToday() {
     const first = paper.questions[0];
     $("suggested-teaser").hidden = !first || Boolean(seen);
     $("suggested-question").textContent = first ? first.question : "";
-    $("suggested-cover").innerHTML = coverImage(paper);
-    $("suggested-cover").dataset.study = paper.stem;
     $("start-suggested").textContent = total ? "Start studying" : "Start reading";
     $("start-suggested").disabled = false;
   } else {
@@ -131,43 +168,107 @@ function renderToday() {
   $("review-count").textContent = stats.review_pile;
   $("review-title").textContent = `${stats.review_pile === 1 ? "question" : "questions"} you missed last time`;
 
-  // The last seven days, from the same data as the reading grid.
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 6);
-  const since = weekAgo.toISOString().slice(0, 10);
-  const week = (stats.days || []).filter((day) => day.date >= since);
-  const read = week.reduce((n, day) => n + day.read.length, 0);
-  const answered = week.reduce((n, day) => n + day.answered, 0);
-  $("week-count").textContent = read;
-  $("week-meta").textContent = `${read === 1 ? "paper" : "papers"} read · ${plural(answered, "question")} answered`;
+  // This week, Monday to Sunday: a circle a day, filled on the days
+  // something was read or answered, dashed for the days still to come.
+  const week = weekDays(stats.days);
+  const read = week.reduce((n, { day }) => n + (day?.read.length || 0), 0);
+  const answered = week.reduce((n, { day }) => n + (day?.answered || 0), 0);
+  const done = [read && `${plural(read, "paper")} read`, answered && `${plural(answered, "question")} answered`].filter(Boolean);
+  $("week-meta").textContent = done.length ? done.join(" · ") : "Nothing yet this week";
+  $("week-days").innerHTML = week
+    .map(({ date, day, when }) => {
+      const active = isActive(day);
+      const name = new Date(date + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" });
+      const detail = active
+        ? [day.read.length && `${plural(day.read.length, "paper")} read`, day.answered && `${day.correct}/${day.answered} questions right`].filter(Boolean).join(", ")
+        : when === "future" ? "still to come" : "nothing";
+      return `<span class="week-day is-${when}${active ? " is-active" : ""}" title="${name}: ${detail}">
+        <i>${active ? icon("check") : ""}</i>${when === "today" ? "Today" : name}</span>`;
+    })
+    .join("");
 
   const studied = papers.filter((p) => p.last_studied).slice(0, 4);
   $("recent").innerHTML = studied.length
-    ? `<div class="section-head"><h2>Recently studied</h2></div>
-       <div class="list">${studied.map(paperRow).join("")}</div>`
+    ? `<p class="eyebrow">Recently</p>${studied.map(recentRow).join("")}`
     : "";
 }
 
-// ---- library ------------------------------------------------------------
-
-function paperRow(paper) {
-  const { total, seen, correct, review } = paper.counts;
-  const tags = [
-    total ? `<span class="tag">${plural(total, "question")}</span>` : `<span class="tag">for reading</span>`,
-    seen ? `<span class="tag tag--done">${correct}/${seen} right</span>` : "",
-    review ? `<span class="tag tag--review">${review} to review</span>` : "",
-  ].join("");
-  const when = paper.last_studied ? `Studied ${shortDate(paper.last_studied)}` : "";
-  return `
-    <article class="list-row" data-stem="${paper.stem}">
-      <div class="thumb">${coverImage(paper)}</div>
-      <div>
-        <h3>${escapeHtml(paper.title)}</h3>
-        <div class="tags">${tags}<span class="hint">${when}</span></div>
-      </div>
-      <div class="actions"><button class="btn btn--sm" data-study="${paper.stem}">Open</button></div>
-    </article>`;
+// Dates are the library's YYYY-MM-DD keys.
+function dayKey(date) {
+  return date.toISOString().slice(0, 10);
 }
+
+// A day counts when something was read or a question answered.
+function isActive(day) {
+  return Boolean(day && (day.read.length || day.answered));
+}
+
+// `n` days from `start`, each with its entry (if any) and whether it's past,
+// today or still to come.
+function daysFrom(start, n, days) {
+  const byDate = new Map((days || []).map((day) => [day.date, day]));
+  const today = dayKey(new Date());
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const date = dayKey(d);
+    return { date, day: byDate.get(date), when: date === today ? "today" : date < today ? "past" : "future" };
+  });
+}
+
+// Monday to Sunday of the current week.
+function weekDays(days) {
+  const monday = new Date();
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return daysFrom(monday, 7, days);
+}
+
+// The last `n` days, oldest first.
+function lastDays(days, n) {
+  const start = new Date();
+  start.setDate(start.getDate() - (n - 1));
+  return daysFrom(start, n, days);
+}
+
+// Where you are with a paper, as one chip: the same in the Library and on Today.
+function statusTag(paper) {
+  const { seen, correct, review } = paper.counts;
+  if (review) return `<span class="tag tag--review">${review} to review</span>`;
+  if (paper.read_at) return `<span class="tag tag--read">Read</span>`;
+  if (seen) return `<span class="tag tag--done">${correct}/${seen} right</span>`;
+  return `<span class="tag">Unread</span>`;
+}
+
+function recentRow(paper) {
+  return `<button class="recent-row" data-study="${paper.stem}"><span>${escapeHtml(paper.title)}</span>${statusTag(paper)}</button>`;
+}
+
+// Days in a row with something read or answered, counting back from today
+// (or from yesterday, so the streak doesn't vanish before today's reading).
+function streakLength(days) {
+  const active = new Set((days || []).filter(isActive).map((d) => d.date));
+  const d = new Date();
+  if (!active.has(dayKey(d))) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (active.has(dayKey(d))) {
+    n += 1;
+    d.setDate(d.getDate() - 1);
+  }
+  return n;
+}
+
+function renderStreak() {
+  const days = state.data.stats.days;
+  const n = streakLength(days);
+  $("streak").hidden = n === 0;
+  $("streak-count").textContent = n;
+  $("streak-label").textContent = n === 1 ? "day in a row" : "days in a row";
+  $("streak-week").innerHTML = lastDays(days, 7)
+    .map(({ day }) => `<i class="${isActive(day) ? "is-active" : ""}"></i>`)
+    .join("");
+}
+
+// ---- library ------------------------------------------------------------
 
 function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) =>
@@ -179,30 +280,34 @@ function coverUrl(path) {
   return `file://${path.replace(/\\/g, "/")}`;
 }
 
+// A paper as an index card: where it's from and where you are with it along
+// the top, above the card's red rule.
 function shelfCard(paper) {
   const { total, seen, correct, review } = paper.counts;
   const added = new Date(paper.added).toLocaleDateString(undefined, { day: "numeric", month: "short" });
   const facts = [paper.pages ? `${paper.pages} pages` : "", `added ${added}`].filter(Boolean);
+  const kind = (paper.reader_kind || paper.kind) === "article" ? "Web article" : "PDF";
   const tags = [
-    paper.read_at ? `<span class="tag tag--read">Read</span>` : "",
     total ? `<span class="tag">${plural(total, "question")}</span>` : `<span class="tag">For reading</span>`,
     total && seen ? `<span class="tag tag--done">${correct}/${seen} right</span>` : "",
-    review ? `<span class="tag tag--review">${review} to review</span>` : "",
     paper.notes ? `<span class="tag tag--notes">Notes</span>` : "",
   ].join("");
   return `
-    <article class="shelf-card" data-stem="${paper.stem}">
-      <div class="cover" data-cover-for="${paper.stem}" data-study="${paper.stem}" title="Open">
-        ${coverImage(paper)}
-      </div>
-      <div class="shelf-body">
-        <h3 title="${escapeHtml(paper.title)}">${escapeHtml(paper.title)}</h3>
-        <p class="shelf-facts">${facts.join(" · ")}</p>
-        <div class="tags">${tags}</div>
-        <div class="row">
-          <button class="btn btn--sm btn--primary" data-study="${paper.stem}">${total ? "Study" : "Read"}</button>
-          ${total ? `<button class="btn btn--sm btn--ghost" data-peek="${paper.stem}">Questions</button>` : ""}
+    <article class="index-card shelf-card${review ? " index-card--stack" : ""}" data-stem="${paper.stem}">
+      <div class="card-head"><p class="eyebrow">${kind}</p>${statusTag(paper)}</div>
+      <div class="shelf-main">
+        <div class="shelf-body">
+          <h3 title="${escapeHtml(paper.title)}">${escapeHtml(paper.title)}</h3>
+          <p class="shelf-facts">${facts.join(" · ")}</p>
+          <div class="tags">${tags}</div>
         </div>
+        <div class="cover" data-cover-for="${paper.stem}" data-study="${paper.stem}" title="Open">
+          ${coverImage(paper)}
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn btn--sm btn--primary" data-study="${paper.stem}">${total ? "Study" : "Read"}</button>
+        ${total ? `<button class="btn btn--sm btn--ghost" data-peek="${paper.stem}">Questions</button>` : ""}
       </div>
     </article>`;
 }
@@ -223,11 +328,11 @@ function renderLibrary() {
     ? `${plural(papers.length, "paper")} · ${read} read`
     : "Everything you've added.";
   $("library-list").innerHTML = !papers.length
-    ? `<div class="empty-state" style="grid-column:1/-1"><h3>Your library is empty</h3>
+    ? `<div class="empty-state"><h3>Your library is empty</h3>
          <p>Drop a PDF on this window or paste a link in the Inbox.</p></div>`
     : shown.length
       ? shown.map(shelfCard).join("")
-      : `<div class="empty-state" style="grid-column:1/-1"><p>No papers match.</p></div>`;
+      : `<div class="empty-state"><p>No papers match.</p></div>`;
   loadMissingCovers(shown);
   renderQueue();
 }
@@ -236,7 +341,7 @@ function renderLibrary() {
 function queueRow(paper) {
   const size = Math.max(0.1, Math.round(paper.size_bytes / 1e5) / 10);
   return `
-    <article class="list-row">
+    <article class="index-card queue-card">
       <div class="thumb">${paper.cover ? `<img src="${coverUrl(paper.cover)}" alt="" />` : icon(paper.kind === "pdf" ? "doc" : "globe")}</div>
       <div>
         <h3>${escapeHtml(paper.title)}</h3>
@@ -253,9 +358,9 @@ function queueRow(paper) {
 function renderQueue() {
   const queued = state.data.inbox || [];
   $("library-queue").innerHTML = queued.length
-    ? `<div class="section-head"><h2>Not processed yet</h2>
+    ? `<div class="sheet queue-sheet"><div class="section-head"><h2>Not processed yet</h2>
          <p class="hint">Questions are written at 02:00, or when you ask for them.</p></div>
-       <div class="list list--dashed">${queued.map(queueRow).join("")}</div>`
+       <div class="pile-cards">${queued.map(queueRow).join("")}</div></div>`
     : "";
 }
 
@@ -297,7 +402,7 @@ function renderInbox() {
   const { inbox } = state.data;
   $("inbox-list").innerHTML = inbox.length
     ? inbox.map(queueRow).join("")
-    : `<p class="list-empty">Nothing waiting. Paste a link above or drop PDFs on the window.</p>`;
+    : `<p class="list-empty">Nothing waiting. Paste a link or drop PDFs on the window.</p>`;
   const pip = $("inbox-pip");
   pip.hidden = inbox.length === 0;
   pip.textContent = inbox.length;
@@ -518,7 +623,27 @@ function showTab(name) {
   }
   $("tab-questions").hidden = name !== "questions";
   $("tab-notes").hidden = name !== "notes";
-  if (name === "notes") $("notes-text").focus();
+  syncMarkRow();
+}
+
+// Got it / Missed it sit below the card, so they follow the answer rather
+// than living inside it: shown once it's revealed, on the Questions tab.
+// The same test gates the y/n keys.
+function onQuestion() {
+  return !$("tab-questions").hidden && !$("quiz-body").hidden && $("quiz-done").hidden;
+}
+function syncMarkRow() {
+  $("mark-row").hidden = !(state.revealed && onQuestion());
+}
+
+// The questions still to come are a stack of cards behind this one.
+function setCardStack(left) {
+  const layers = [];
+  for (let i = 1; i <= Math.min(left, 7); i++) {
+    layers.push(`${i * 2}px ${i * 2}px 0 var(--card-edge)`, `${i * 2}px ${i * 2}px 0 1px var(--card-line)`);
+  }
+  const card = $("quiz-card").style;
+  layers.length ? card.setProperty("--stack", layers.join(", ")) : card.removeProperty("--stack");
 }
 
 // Notes live in the paper's question file, so they're there next time.
@@ -699,7 +824,7 @@ function renderHeatmap(days) {
   let column = 0;
   let lastMonth = null;
   for (const day = new Date(start); day <= today; day.setDate(day.getDate() + 1)) {
-    const date = day.toISOString().slice(0, 10);
+    const date = dayKey(day);
     const entry = byDate.get(date);
     cells.push(`<span class="cell level-${entry ? heatLevel(entry) : 0}" data-date="${date}"></span>`);
     if (day.getDay() === 0) {
@@ -940,13 +1065,15 @@ async function setSchedule(action) {
 
 // ---- study session ------------------------------------------------------
 
-function startSession(items, title) {
+// A paper opens on its notes (read, jot, then answer); the review pile is
+// all questions, so it opens straight on those.
+function startSession(items, title, tab = "notes") {
   if (!items.length) return toast("No questions there yet");
   loadNotes(items[0].paper);
   showReadState(items[0].paper);
   $("no-questions").hidden = true;
   $("quiz-progress").hidden = false;
-  showTab("questions");
+  showTab(tab);
   state.session = { items, index: 0, results: [], title };
   show("study");
   $("quiz-done").hidden = true;
@@ -967,10 +1094,12 @@ function startPaper(stem) {
     $("quiz-done").hidden = true;
     $("no-questions").hidden = false;  // say so, rather than showing a blank panel
     $("quiz-progress").hidden = true;
-    $("study-title").textContent = paper.title;
+    state.revealed = false;
+    setCardStack(0);
+    $("study-title").textContent = $("study-title").title = paper.title;
     loadPdf(state.session.items[0]);
     showReadState(paper.stem);
-    showTab("questions");
+    showTab("notes");
     return loadNotes(paper.stem);
   }
   startSession(
@@ -988,7 +1117,7 @@ function startReview() {
     if (question) items.push({ paper: paper.stem, title: paper.title, reader: paper.reader,
                                readerKind: paper.reader_kind, question });
   }
-  startSession(items, "Review pile");
+  startSession(items, "Review pile", "questions");
 }
 
 // The reader is a module (reader.mjs) and may still be loading on the
@@ -1012,23 +1141,32 @@ async function showEvidence() {
   if (!found) toast(q.page ? `Couldn't find the exact words, so here's page ${q.page}` : "Couldn't find that passage in the paper", 4000);
 }
 
-function renderQuestion() {
+// The dots (right, missed, to come) and the count on the card's header.
+function renderQuizProgress() {
   const { items, index, results } = state.session;
-  const item = items[index];
-  const q = item.question;
-  state.revealed = false;
-
-  $("study-title").textContent = item.title;
-  loadPdf(item);
-
+  const done = results.length === items.length && !results.includes(undefined);
   $("quiz-dots").innerHTML = items
     .map((_, i) => {
       const mark = results[i] === undefined ? (i === index ? "is-current" : "") : results[i] ? "is-right" : "is-wrong";
       return `<span class="dot ${mark}"></span>`;
     })
     .join("");
+  const left = items.length - index - 1;
+  $("quiz-count").textContent = done ? `All ${items.length} done`
+    : `${index + 1} of ${items.length}${left ? ` · ${left} left` : " · last one"}`;
+  setCardStack(done ? 0 : left);
+}
 
-  $("quiz-count").textContent = `${index + 1} of ${items.length}`;
+function renderQuestion() {
+  const { items, index } = state.session;
+  const item = items[index];
+  const q = item.question;
+  state.revealed = false;
+
+  $("study-title").textContent = $("study-title").title = item.title;
+  loadPdf(item);
+
+  renderQuizProgress();
   const level = LEVEL_LABELS[q.type] || (q.type ? q.type[0].toUpperCase() + q.type.slice(1) : "Question");
   $("q-type").dataset.level = q.type || "";
   $("q-type").innerHTML = `<i></i>${escapeHtml(level)}${state.session.title === "Review pile" ? ` · <span>${escapeHtml(item.title)}</span>` : ""}`;
@@ -1056,6 +1194,7 @@ function renderQuestion() {
   $("check").disabled = false;
   $("verdict").hidden = true;
   $("answer-block").hidden = true;
+  syncMarkRow();
 }
 
 function revealAnswer() {
@@ -1066,6 +1205,7 @@ function revealAnswer() {
   $("your-answer").innerHTML = typed ? `<span class="eyebrow">You wrote</span>${escapeHtml(typed)}` : "";
   $("answer-stage").hidden = true;
   $("answer-block").hidden = false;
+  syncMarkRow();
 }
 
 async function checkTypedAnswer() {
@@ -1123,6 +1263,8 @@ function finishSession() {
   const right = results.filter(Boolean).length;
   $("quiz-body").hidden = true;
   $("quiz-done").hidden = false;
+  renderQuizProgress();
+  syncMarkRow();
   $("score").textContent = `${right} / ${items.length}`;
   $("score-note").textContent = right === items.length
     ? "Every one. Nothing goes to the review pile."
@@ -1239,6 +1381,16 @@ async function changeMemorySettings(action) {
 $("fix-memory").addEventListener("click", () => changeMemorySettings("set"));
 $("clear-memory").addEventListener("click", () => changeMemorySettings("clear"));
 
+$("wood-choice").innerHTML = WOODS.map(([id, name]) =>
+  `<button role="radio" data-wood="${id}" title="${name}" aria-label="${name}" style="background-image:url('${woodUrl(id, true)}')"></button>`).join("");
+$("wood-choice").addEventListener("click", (event) => {
+  const swatch = event.target.closest("[data-wood]");
+  if (!swatch) return;
+  try { localStorage.setItem("dtr:wood", swatch.dataset.wood); } catch { /* still applies for this session */ }
+  applyWood(swatch.dataset.wood);
+});
+applyWood(storedWood());
+
 document.querySelectorAll("[data-theme-choice]").forEach((button) => {
   button.addEventListener("click", () => {
     const choice = button.dataset.themeChoice;
@@ -1339,7 +1491,10 @@ document.querySelectorAll("[data-filter]").forEach((button) => {
   });
 })();
 document.querySelectorAll(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => showTab(tab.dataset.tab));
+  tab.addEventListener("click", () => {
+    showTab(tab.dataset.tab);
+    if (tab.dataset.tab === "notes") $("notes-text").focus();
+  });
 });
 $("review-from-progress").addEventListener("click", startReview);
 $("write-questions").addEventListener("click", writeQuestionsNow);
@@ -1370,7 +1525,7 @@ document.addEventListener("keydown", (event) => {
   }
   if (["TEXTAREA", "INPUT", "SELECT"].includes(event.target.tagName)) return;
   if (event.key === "Escape") return $("leave-study").click();
-  if (!$("quiz-done").hidden || $("tab-questions").hidden) return;
+  if (!onQuestion()) return;
   if (!state.session?.items[state.session.index]?.question) return;
   if (!state.revealed && (event.key === " " || event.key === "Enter")) {
     event.preventDefault();

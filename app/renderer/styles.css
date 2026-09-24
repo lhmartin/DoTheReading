@@ -31,11 +31,9 @@
 
   /* surfaces, back to front */
   --bg: #f4f0e6;
-  --bg-2: #ece6d8;          /* sidebar, toolbars */
   --surface: #fbf9f3;       /* cards */
   --sunk: #f1ece1;          /* insets inside a card */
   --field: #fffdf8;         /* inputs */
-  --page-well: #d9d2c3;     /* behind PDF pages */
 
   /* ink */
   --ink: #1d1b17;
@@ -71,23 +69,67 @@
   --r-lg: 12px;
 
   --shadow-sm: 0 1px 2px rgba(29, 27, 23, 0.06);
-  --shadow: 0 1px 2px rgba(29, 27, 23, 0.05), 0 8px 24px -16px rgba(29, 27, 23, 0.35);
   --shadow-pop: 0 2px 6px rgba(29, 27, 23, 0.12), 0 18px 40px -18px rgba(29, 27, 23, 0.5);
 
-  --sidebar: 212px;
-  --content: 1120px;
+  --rail: 220px;
   --ease: cubic-bezier(0.2, 0.9, 0.3, 1);
+
+  /* study: the leather cover, its pages and index cards */
+  --leather: #a2683a;
+  --leather-tile: url("textures/leather.png");
+  --stitch: rgba(250, 232, 200, 0.42);
+  --on-leather: #fbe9cc;
+  --on-leather-strong: #fff3de;
+  --leather-btn: rgba(48, 24, 6, 0.46);
+  --leather-btn-hover: rgba(48, 24, 6, 0.6);
+  --leather-btn-edge: #c79b6c;
+  --page: #efe5cf;
+  --page-edge-1: #dccfb1;
+  --page-edge-2: #cfc0a0;
+  --page-edge-3: #e3d7bc;
+  --page-rule: #d9c9a8;
+  --page-ink: #5a4630;
+  --grain: url("textures/paper-grain.png");
+  --card: #fdfbf5;
+  --card-edge: #f3eee0;
+  --card-line: #cfc3a8;
+  --card-rule: #d98f84;
+  --card-sunk: #f6f0e3;
+  --card-sunk-line: #e6dcc6;
+  --tab-idle: #e4d7ba;
+  --tab-idle-ink: #5a4630;
+  --cover-shadow: rgba(30, 15, 0, 0.4);
+  --shadow-on-leather: 0 1px 2px rgba(20, 10, 0, 0.35);
+  --card-lift: 0 2px 5px rgba(40, 25, 5, 0.14);
+
+  /* Whole backgrounds, built from the tokens above (any theme). */
+  --card-paper: var(--grain) 0 0 / 256px 256px, var(--card);
+  --page-paper: var(--grain) 0 0 / 256px 256px, var(--page);
+  --leather-bg: var(--leather) var(--leather-tile) 0 0 / 256px 256px fixed;
+  --page-edges: 1px 0 0 var(--page-edge-1), 3px 1px 0 var(--page-edge-2), 5px 2px 0 var(--page-edge-3), 0 8px 16px var(--cover-shadow);
+  --gutter-right: linear-gradient(270deg, transparent 90%, rgba(40, 25, 5, 0.08) 96%, rgba(30, 18, 5, 0.28));
+  --dots: rgba(90, 70, 45, 0.26);
+  --graph-minor: rgba(70, 115, 160, 0.17);
+  --graph-major: rgba(70, 115, 160, 0.3);
+
+  /* the rail: wood beside the cover. The wood itself (--wood, --wood-tile)
+     is the reader's choice, set from Settings; cherry until then. */
+  --wood: #8e4f30;
+  --wood-tile: url("textures/woods/cherry.jpg");
+  --wood-shade: linear-gradient(90deg, rgba(20, 10, 2, 0.18), rgba(20, 10, 2, 0.32));
+  --on-wood: #f4e6c9;
+  --mark-wash: rgba(110, 30, 20, 0.72);
+  --mark-stitch: rgba(250, 220, 200, 0.35);
+  --on-mark: #fbe6d8;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #171512;
-    --bg-2: #1e1b17;
     --surface: #221f1a;
     --sunk: #1b1915;
     --field: #1a1814;
-    --page-well: #2b2823;
     --ink: #ece6da;
     --ink-2: #bdb4a5;
     --ink-3: #978e80;
@@ -102,24 +144,57 @@
     --warn: #dcb66b;
     --warn-soft: #33291a;
     --mark: rgba(220, 182, 107, 0.35);
-    --heat-0: #2a2621;
+    --heat-0: #3b342c;
     --heat-1: #5b2e26;
     --heat-2: #8c4234;
     --heat-3: #c2644f;
     --heat-4: #eea08c;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 8px 24px -16px rgba(0, 0, 0, 0.6);
     --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.4), 0 18px 40px -18px rgba(0, 0, 0, 0.8);
+
+    /* study: the leather cover, its pages and index cards */
+    --leather: #3b2618;
+    --leather-tile: url("textures/leather-dark.png");
+    --stitch: rgba(230, 200, 160, 0.26);
+    --on-leather: #eadcc0;
+    --on-leather-strong: #f5e8cf;
+    --leather-btn: rgba(0, 0, 0, 0.34);
+    --leather-btn-hover: rgba(0, 0, 0, 0.5);
+    --leather-btn-edge: #7a5a3e;
+    --page: #24201b;
+    --page-edge-1: #2e2923;
+    --page-edge-2: #1a1713;
+    --page-edge-3: #2a251f;
+    --page-rule: #3d352b;
+    --page-ink: #cbbd9f;
+    --grain: url("textures/paper-grain-dark.png");
+    --card: #2b2620;
+    --card-edge: #25211c;
+    --card-line: #3f372d;
+    --card-rule: #8a4a3f;
+    --card-sunk: #302a23;
+    --card-sunk-line: #463d32;
+    --tab-idle: #1f1b17;
+    --tab-idle-ink: #b3a58a;
+    --cover-shadow: rgba(0, 0, 0, 0.55);
+    --shadow-on-leather: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --card-lift: 0 2px 5px rgba(0, 0, 0, 0.4);
+    --dots: rgba(230, 210, 170, 0.12);
+    --graph-minor: rgba(150, 190, 230, 0.07);
+    --graph-major: rgba(150, 190, 230, 0.13);
+    --wood-shade: linear-gradient(90deg, rgba(20, 10, 2, 0.5), rgba(20, 10, 2, 0.62));
+    --on-wood: #e6d6b6;
+    --mark-wash: rgba(120, 32, 22, 0.62);
+    --mark-stitch: rgba(250, 220, 200, 0.22);
+    --on-mark: #f3dccd;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #171512;
-  --bg-2: #1e1b17;
   --surface: #221f1a;
   --sunk: #1b1915;
   --field: #1a1814;
-  --page-well: #2b2823;
   --ink: #ece6da;
   --ink-2: #bdb4a5;
   --ink-3: #978e80;
@@ -134,14 +209,49 @@
   --warn: #dcb66b;
   --warn-soft: #33291a;
   --mark: rgba(220, 182, 107, 0.35);
-  --heat-0: #2a2621;
+  --heat-0: #3b342c;
   --heat-1: #5b2e26;
   --heat-2: #8c4234;
   --heat-3: #c2644f;
   --heat-4: #eea08c;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 8px 24px -16px rgba(0, 0, 0, 0.6);
   --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.4), 0 18px 40px -18px rgba(0, 0, 0, 0.8);
+
+  /* study: the leather cover, its pages and index cards */
+  --leather: #3b2618;
+  --leather-tile: url("textures/leather-dark.png");
+  --stitch: rgba(230, 200, 160, 0.26);
+  --on-leather: #eadcc0;
+  --on-leather-strong: #f5e8cf;
+  --leather-btn: rgba(0, 0, 0, 0.34);
+  --leather-btn-hover: rgba(0, 0, 0, 0.5);
+  --leather-btn-edge: #7a5a3e;
+  --page: #24201b;
+  --page-edge-1: #2e2923;
+  --page-edge-2: #1a1713;
+  --page-edge-3: #2a251f;
+  --page-rule: #3d352b;
+  --page-ink: #cbbd9f;
+  --grain: url("textures/paper-grain-dark.png");
+  --card: #2b2620;
+  --card-edge: #25211c;
+  --card-line: #3f372d;
+  --card-rule: #8a4a3f;
+  --card-sunk: #302a23;
+  --card-sunk-line: #463d32;
+  --tab-idle: #1f1b17;
+  --tab-idle-ink: #b3a58a;
+  --cover-shadow: rgba(0, 0, 0, 0.55);
+  --shadow-on-leather: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --card-lift: 0 2px 5px rgba(0, 0, 0, 0.4);
+  --dots: rgba(230, 210, 170, 0.12);
+  --graph-minor: rgba(150, 190, 230, 0.07);
+  --graph-major: rgba(150, 190, 230, 0.13);
+  --wood-shade: linear-gradient(90deg, rgba(20, 10, 2, 0.5), rgba(20, 10, 2, 0.62));
+  --on-wood: #e6d6b6;
+  --mark-wash: rgba(120, 32, 22, 0.62);
+  --mark-stitch: rgba(250, 220, 200, 0.22);
+  --on-mark: #f3dccd;
 }
 
 /* ---- base --------------------------------------------------------------- */
@@ -177,54 +287,78 @@ button, input, select, textarea { font: inherit; color: inherit; }
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
 
-/* ---- sidebar ------------------------------------------------------------ */
+/* ---- the rail: wood beside the cover ----------------------------------- */
 
 .rail {
-  width: var(--sidebar);
-  flex: 0 0 var(--sidebar);
+  width: var(--rail);
+  flex: 0 0 var(--rail);
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 22px 12px 14px;
-  background: var(--bg-2);
-  border-right: 1px solid var(--rule);
+  padding: 22px 0 14px 12px;
+  background: var(--wood-shade), var(--wood) var(--wood-tile) 0 0 / 1024px 512px;
 }
 
+/* The name is the first index tab: oxblood leather, stitched, running under
+   the cover like the section tabs below it. The leather is the cover's own,
+   pinned to the window, under an oxblood wash. */
 .mark {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 50px;
+  margin: 0 -24px 26px -10px;
+  padding: 0 40px 0 18px;
+  border-radius: 8px 0 0 8px;
+  background:
+    linear-gradient(var(--mark-wash), var(--mark-wash)),
+    var(--leather-bg);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
   font-family: var(--serif);
-  font-size: 21px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  color: var(--ink);
-  padding: 0 10px;
-  margin-bottom: 26px;
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--on-mark);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
 }
-.mark span { color: var(--accent); }
+.mark::before { /* stitching, open on the side that runs under the cover */
+  content: ""; position: absolute; inset: 5px 0 5px 5px; pointer-events: none;
+  border: 1.5px dashed var(--mark-stitch); border-right: 0; border-radius: 5px 0 0 5px;
+}
+.mark span { font-style: italic; font-weight: 500; margin: 0 0.25em; }
 
+/* Every section is an index tab running out from under the cover; the one
+   you're on sticks out further, in the index cards' colour. */
+.rail-tabs { display: flex; flex-direction: column; gap: 8px; margin-bottom: auto; }
 .rail-btn {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 11px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: var(--r-md);
-  background: none;
-  font-size: 14px;
+  gap: 12px;
+  height: 44px;
+  margin: 0 -24px 0 16px;
+  padding: 0 40px 0 16px;
+  border: 1px solid var(--card-line);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: var(--tab-idle);
+  font-size: 14.5px;
   font-weight: 500;
-  color: var(--ink-2);
+  color: var(--tab-idle-ink);
   text-align: left;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  transition: margin-left 160ms var(--ease);
 }
-.rail-btn svg { flex: none; width: 18px; height: 18px; opacity: 0.8; }
+.rail-btn svg { flex: none; width: 18px; height: 18px; }
 .rail-btn span { flex: 1; }
-.rail-btn:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
-.rail-btn.is-active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
-.rail-btn.is-active svg { color: var(--accent); opacity: 1; }
-.rail-btn--foot { margin-top: auto; color: var(--ink-3); font-weight: 450; }
+.rail-btn:hover { margin-left: 8px; }
+.rail-btn.is-active {
+  margin-left: 0;
+  background: var(--card-paper);
+  color: var(--ink);
+  font-weight: 600;
+}
+.rail-btn.is-active svg { color: var(--accent); }
 
 .pip {
   flex: none;
@@ -241,85 +375,163 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .pip--warn { background: var(--warn); color: var(--surface); }
 
-/* Narrow windows: icons only. */
+/* Days in a row, on a card at the foot of the rail. */
+.streak {
+  margin: 0 18px 12px 16px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4); /* on wood, not paper */
+}
+.streak p { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.streak b { font-family: var(--serif); font-size: 26px; font-weight: 500; line-height: 1; color: var(--ink); }
+.streak-week { display: flex; gap: 4px; margin-top: 10px; }
+.streak-week i { flex: 1; height: 5px; border-radius: 3px; background: var(--card-line); }
+.streak-week i.is-active { background: var(--good); }
+
+.refresh {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 38px;
+  margin-right: 12px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  font-size: 13.5px;
+  color: var(--on-wood);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+  opacity: 0.8;
+  cursor: pointer;
+}
+.refresh:hover { opacity: 1; }
+.refresh svg { width: 16px; height: 16px; }
+
+/* Narrow windows: icon tabs. */
 @media (max-width: 1080px) {
-  :root { --sidebar: 64px; }
-  .rail { padding-inline: 10px; }
-  .mark { font-size: 0; padding: 0; margin-bottom: 22px; text-align: center; }
-  .mark::before { content: "DR"; font-size: 18px; color: var(--accent); }
-  .rail-btn { justify-content: center; padding: 10px 0; position: relative; }
+  :root { --rail: 84px; }
+  .mark { font-size: 0; padding-left: 16px; }
+  .mark::after { content: "DR"; font-size: 18px; }
+  .rail-btn { padding: 0 34px 0 14px; position: relative; }
   .rail-btn span { display: none; }
-  .rail-btn .pip { position: absolute; top: 2px; right: 2px; min-width: 16px; padding: 0 4px; font-size: 10px; }
+  .rail-btn .pip { position: absolute; top: 2px; left: 26px; min-width: 16px; padding: 0 4px; font-size: 10px; }
+  .streak, .refresh span { display: none; }
 }
 
-/* ---- views -------------------------------------------------------------- */
+/* ---- the cover ------------------------------------------------------------ */
 
-main { flex: 1; min-width: 0; overflow: hidden; position: relative; }
+/* Every screen sits on the reading page's leather cover. The leather is
+   pinned to the window, so the leather buttons (which show the same tile
+   through a darker wash) line up with the cover around them. */
+main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--leather-bg);
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.45); /* onto the rail, whose tabs tuck under */
+}
+main::before { /* worn edges */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 80px rgba(20, 10, 0, 0.3);
+}
+main::after { /* stitching */
+  content: ""; position: absolute; inset: 9px; pointer-events: none;
+  border: 1.5px dashed var(--stitch); border-radius: 14px;
+}
 
 .view {
   display: none;
-  height: 100%;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   overflow-y: auto;
-  /* content column, centred on wide windows */
-  padding: 40px max(40px, calc((100% - var(--content)) / 2)) 64px;
+  padding: 22px max(32px, calc((100% - 1240px) / 2)) 30px;
   animation: rise 360ms var(--ease) both;
 }
-.view.is-active { display: block; }
+.view.is-active { display: flex; flex-direction: column; }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 
-.masthead { margin-bottom: 28px; }
-.masthead h1 {
-  font-size: 34px;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  font-weight: 450;
+/* A screen's name, on the same paper label as the paper's title when reading. */
+.cover-bar { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-height: 44px; margin-bottom: 22px; }
+.cover-label, .study-bar h2, .slip {
+  position: relative;
+  background: var(--card-paper);
+  border: 1px solid var(--card-line);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--card-edge), 0 3px 6px var(--cover-shadow);
 }
-.masthead .lede { margin-top: 6px; color: var(--ink-2); font-size: 15px; }
-.masthead--hero h1 { font-size: 46px; letter-spacing: -0.028em; }
-.masthead--hero .eyebrow { margin-bottom: 8px; }
-.masthead--row { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.cover-label, .study-bar h2 { height: 42px; padding: 0 22px; white-space: nowrap; overflow: hidden; }
+.cover-label::before, .study-bar h2::before {
+  content: ""; position: absolute; inset: 3px; pointer-events: none;
+  border: 1px solid var(--leather-btn-edge); border-radius: 2px;
+}
+.cover-label { display: flex; align-items: baseline; gap: 12px; min-width: 0; line-height: 40px; }
+.cover-label h1 { font-size: 18px; font-weight: 500; letter-spacing: 0; }
+.cover-label span { font-size: 13.5px; font-weight: 500; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
 
 .eyebrow {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
 
 .meta { color: var(--ink-2); font-size: 13.5px; margin-top: 6px; }
 .hint { color: var(--ink-3); font-size: 13px; }
+.lede { margin-top: 4px; font-family: var(--serif); font-size: 16px; color: var(--ink-2); }
 
-.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 36px 0 14px; }
-.section-head h2 { font-size: 20px; letter-spacing: -0.01em; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.section-head h2 { font-size: 20px; font-weight: 500; }
 .section-head .hint { margin: 0; }
 
-/* ---- cards & panels ----------------------------------------------------- */
+/* ---- paper ------------------------------------------------------------------ */
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  padding: 24px 26px;
-  box-shadow: var(--shadow);
+/* A sheet: the page the paper is read on, with its stacked edges. */
+.sheet {
+  position: relative;
+  padding: 26px 30px;
+  background: var(--page-paper);
+  border-radius: 6px;
+  box-shadow: var(--page-edges);
 }
-.card + .card { margin-top: 18px; }
-.card-title { font-size: 18px; letter-spacing: -0.01em; margin-bottom: 4px; }
-.card > .eyebrow + * { margin-top: 10px; }
-.card h2 { font-size: 24px; line-height: 1.22; letter-spacing: -0.015em; }
+.sheet h2 { font-size: 20px; font-weight: 500; }
 
-/* An inset inside a card: previews, notices, "no questions yet". */
-.panel {
-  margin-top: 16px;
-  padding: 16px 18px;
-  background: var(--sunk);
-  border: 1px solid var(--rule);
+/* An index card, as the questions are: a red rule under its heading, and
+   (--stack) more cards behind it. The streak and the empty notes are cards too. */
+.index-card, .streak, .empty-state, .list-empty {
+  position: relative;
+  background: var(--card-paper);
+  border: 1px solid var(--card-line);
+  border-radius: 6px;
+  box-shadow: var(--card-lift);
+}
+.index-card { padding: 12px 22px 18px; }
+.index-card > .eyebrow:first-child, .index-card > .card-head {
+  margin: 0 -22px 16px;
+  padding: 0 22px 10px;
+  border-bottom: 1px solid var(--card-rule);
+}
+.index-card--stack {
+  box-shadow:
+    2px 2px 0 var(--card-edge), 2px 2px 0 1px var(--card-line),
+    4px 4px 0 var(--card-edge), 4px 4px 0 1px var(--card-line),
+    6px 6px 0 var(--card-edge), 6px 6px 0 1px var(--card-line),
+    var(--card-lift);
+}
+
+/* An inset on paper: previews, notices, "no questions yet", the clipboard offer. */
+.panel, .clip-offer {
+  background: var(--card-sunk);
+  border: 1px solid var(--card-sunk-line);
   border-radius: var(--r-md);
 }
+.panel { margin-top: 16px; padding: 16px 18px; }
 .panel--note { border-left: 3px solid var(--warn); }
 
 .row { display: flex; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
@@ -356,6 +568,7 @@ main { flex: 1; min-width: 0; overflow: hidden; position: relative; }
 .btn--primary:hover { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn--ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
 .btn--ghost:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); border-color: transparent; color: var(--ink); }
+.btn--lg { height: 44px; padding: 0 20px; font-size: 15px; }
 .btn--sm { height: 30px; padding: 0 11px; font-size: 13px; border-radius: var(--r-sm); }
 .btn--icon { width: 32px; height: 32px; padding: 0; }
 .btn--icon.btn--sm { width: 28px; height: 28px; }
@@ -448,8 +661,8 @@ kbd {
   height: 22px; padding: 0 8px;
   font-size: 12px; font-weight: 500;
   color: var(--ink-2);
-  background: var(--sunk);
-  border: 1px solid var(--rule);
+  background: var(--card-sunk);
+  border: 1px solid var(--card-sunk-line);
   border-radius: 11px;
   white-space: nowrap;
 }
@@ -457,69 +670,87 @@ kbd {
 .tag--done, .tag--read { color: var(--good); background: var(--good-soft); border-color: transparent; }
 .tag--notes { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
 
-/* ---- lists of papers ---------------------------------------------------- */
+/* ---- today: an open spread -------------------------------------------------- */
 
-.list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }
-.list-row {
+.today-spread {
+  flex: 1 0 auto;
+  min-height: 540px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-  padding: 14px 18px;
-  border-top: 1px solid var(--rule);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.list-row:first-child { border-top: 0; }
-.list-row h3 { font-size: 16.5px; line-height: 1.3; letter-spacing: -0.005em; }
-.list-row .tags { margin-top: 6px; }
-.list-row .actions { display: flex; gap: 6px; align-items: center; }
-.list-empty { padding: 26px 20px; text-align: center; color: var(--ink-3); }
-.list--dashed { background: transparent; border-style: dashed; box-shadow: none; }
+.leaf { position: relative; min-width: 0; }
+/* The two pages meet at a gutter that falls into shadow. */
+.leaf--left {
+  border-radius: 6px 0 0 6px;
+  background:
+    linear-gradient(90deg, transparent 86%, rgba(40, 25, 5, 0.08) 94%, rgba(30, 18, 5, 0.3)),
+    var(--page-paper);
+  box-shadow: -1px 0 0 var(--page-edge-1), -3px 1px 0 var(--page-edge-2), -5px 2px 0 var(--page-edge-3), 0 8px 16px var(--cover-shadow);
+}
+.leaf--right {
+  display: flex; flex-direction: column; gap: 24px;
+  padding: 28px 34px 30px 38px;
+  border-radius: 0 6px 6px 0;
+  background: var(--gutter-right), var(--page-paper);
+  box-shadow: var(--page-edges);
+}
+.leaf--dotted { background: var(--gutter-right), radial-gradient(circle, var(--dots) 0.9px, transparent 1.3px) 0 0 / 20px 20px, var(--page-paper); }
+@media (max-width: 1000px) {
+  .today-spread { grid-template-columns: 1fr; }
+  .leaf--left, .leaf--right { border-radius: 6px; }
+}
 
-.thumb {
-  width: 38px; aspect-ratio: 3 / 4;
-  border-radius: 3px;
-  background: var(--sunk);
-  border: 1px solid var(--rule);
-  overflow: hidden;
+/* The left-hand page is set like a title page. */
+.title-page { display: flex; flex-direction: column; justify-content: center; padding: 34px 48px 44px 44px; }
+.title-rule { display: block; width: 48px; height: 2px; margin: 18px 0 20px; background: var(--card-rule); }
+.title-page h2 { font-size: 34px; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em; }
+.title-page .meta { margin-top: 14px; font-size: 14px; }
+.title-page .row { margin-top: 34px; }
+
+.teaser p:last-child { margin-top: 8px; font-family: var(--serif); font-size: 18px; line-height: 1.45; }
+
+.big-row { display: flex; align-items: baseline; gap: 12px; }
+.big-number { font-family: var(--serif); font-size: 44px; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.big-row .meta { margin: 0; font-family: var(--serif); font-size: 15.5px; }
+#review-card .row { margin-top: 14px; }
+
+.week-days { display: flex; justify-content: space-between; }
+.week-day { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 36px; font-size: 12.5px; color: var(--ink-2); }
+.week-day i {
+  width: 32px; height: 32px;
   display: grid; place-items: center;
-  color: var(--ink-3);
+  border: 1.5px solid color-mix(in srgb, var(--ink-3) 60%, var(--card));
+  border-radius: 50%;
 }
-.thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
-.thumb svg { width: 16px; height: 16px; opacity: 0.7; }
+.week-day svg { width: 17px; height: 17px; }
+.week-day.is-active i { background: var(--good); border-color: var(--good); color: var(--card); }
+.week-day.is-future { color: var(--ink-3); }
+.week-day.is-future i { border-style: dashed; border-color: var(--card-line); }
+.week-day.is-today { color: var(--ink); font-weight: 600; }
+.week-day.is-today i { border: 2px solid var(--accent); }
+.week-day.is-today.is-active i { border-color: var(--good); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--accent); }
+.week-meta { margin-top: 14px; font-family: var(--serif); font-size: 15.5px; color: var(--ink-2); }
 
-/* ---- today -------------------------------------------------------------- */
-
-.today-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 18px; align-items: stretch; }
-.today-side { display: flex; flex-direction: column; gap: 18px; }
-.today-side .card + .card { margin-top: 0; }
-
-.feature {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 26px;
-  padding: 26px;
+#recent .eyebrow { margin-bottom: 6px; }
+.recent-row {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--page-rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
 }
-.feature .cover { width: 150px; }
-.feature-body { display: flex; flex-direction: column; min-width: 0; }
-.feature-body h2 { margin-top: 8px; font-size: 27px; }
-.feature-body .row { margin-top: auto; padding-top: 22px; }
-.teaser { margin-top: 18px; padding-left: 14px; border-left: 2px solid var(--rule-strong); }
-.teaser p:last-child { margin-top: 4px; font-family: var(--serif); font-style: italic; font-size: 16px; line-height: 1.45; color: var(--ink-2); }
-.feature--empty { grid-template-columns: 1fr; }
-.feature--empty .cover { display: none; }
-
-.big-number { font-family: var(--serif); font-size: 40px; line-height: 1; letter-spacing: -0.02em; margin-top: 12px; font-variant-numeric: tabular-nums; }
-.side-card { padding: 20px 22px; display: flex; flex-direction: column; }
-.side-card .meta { margin-top: 6px; }
-.side-card .row { margin-top: 16px; }
+.recent-row span:first-child { flex: 1; min-width: 0; font-family: var(--serif); font-size: 15.5px; line-height: 1.35; }
+.recent-row:hover span:first-child { color: var(--accent); }
 
 .clip-offer {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  margin-bottom: 22px;
   padding: 10px 12px 10px 16px;
-  background: var(--warn-soft);
-  border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--surface));
-  border-radius: var(--r-md);
 }
 .clip-offer .meta { margin: 0; color: var(--ink); font-weight: 500; }
 .clip-url {
@@ -530,62 +761,107 @@ kbd {
   color: var(--ink-2);
 }
 
-/* ---- library ------------------------------------------------------------ */
 
-.toolbar { display: flex; gap: 10px; align-items: center; }
+/* ---- library: loose index cards ----------------------------------------------- */
+
+/* On the cover: filters as leather buttons, the current one a paper label. */
+.segmented--leather { padding: 0; gap: 6px; background: none; border: 0; }
+.segmented--leather button.is-active {
+  background: var(--card-paper);
+  border: 1px solid var(--card-line);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-on-leather);
+}
 .search { position: relative; width: 240px; }
 .search svg { position: absolute; left: 11px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
 .search .input { padding-left: 34px; }
-
-#library-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-
-.shelf-card {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 18px;
-  padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow);
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+.search--leather svg { color: var(--on-leather); }
+.search--leather .input {
+  border-color: var(--leather-btn-edge);
+  color: var(--on-leather-strong);
+  background:
+    linear-gradient(var(--leather-btn), var(--leather-btn)),
+    var(--leather-bg);
 }
-.shelf-card:hover { border-color: var(--rule-strong); box-shadow: var(--shadow-pop); }
+.search--leather .input::placeholder { color: var(--on-leather); }
+
+#library-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 26px 28px; padding: 2px 8px 8px 2px; }
+
+.shelf-card { display: flex; flex-direction: column; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 24px; }
+.shelf-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 64px; gap: 16px; align-items: start; }
+.shelf-body h3 {
+  font-size: 17.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.shelf-facts { margin-top: 6px; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.shelf-body .tags { margin-top: 10px; }
+.shelf-card .row { margin-top: 14px; gap: 6px; }
+.shelf-card .questions-peek { margin-top: 14px; }
 
 .cover {
   aspect-ratio: 3 / 4;
   background: var(--field);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
+  border: 1px solid var(--card-line);
+  border-radius: 3px;
   overflow: hidden;
   display: grid; place-items: center;
-  box-shadow: 0 1px 0 var(--rule), 0 6px 14px -10px rgba(29, 27, 23, 0.5);
+  box-shadow: 0 1px 3px rgba(40, 25, 5, 0.25);
   cursor: pointer;
 }
 .cover img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
 .cover-placeholder { display: grid; place-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
 .cover-placeholder svg { width: 22px; height: 22px; opacity: 0.6; }
 
-.shelf-body { display: flex; flex-direction: column; min-width: 0; }
-.shelf-body h3 {
-  font-size: 16.5px;
-  line-height: 1.3;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-}
-.shelf-facts { margin-top: 6px; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.shelf-body .tags { margin-top: 10px; }
-.shelf-body .row { margin-top: auto; padding-top: 14px; gap: 6px; }
-.shelf-card .questions-peek { grid-column: 1 / -1; }
-
-.questions-peek { border-top: 1px solid var(--rule); padding-top: 12px; }
+.questions-peek { border-top: 1px solid var(--page-rule); padding-top: 12px; }
 .questions-peek ol { margin: 0; padding-left: 20px; }
 .questions-peek li { font-family: var(--serif); font-size: 14.5px; line-height: 1.45; margin-bottom: 7px; color: var(--ink-2); }
 .questions-peek em { font-style: normal; font-family: var(--sans); font-size: 12px; color: var(--accent); }
 
-.empty-state { padding: 48px 24px; text-align: center; color: var(--ink-2); border: 1px dashed var(--rule-strong); border-radius: var(--r-lg); }
+.empty-state { grid-column: 1 / -1; padding: 48px 24px; text-align: center; color: var(--ink-2); }
 .empty-state h3 { font-size: 20px; color: var(--ink); margin-bottom: 6px; }
 
-/* ---- inbox -------------------------------------------------------------- */
+.queue-sheet { margin-top: 30px; }
+
+/* ---- inbox: the add form on a sheet, a pile of waiting cards ---------------------- */
+
+.inbox-columns { display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 1fr); gap: 40px; align-items: start; }
+@media (max-width: 1100px) { .inbox-columns { grid-template-columns: 1fr; } }
+.add-sheet > .field { margin-top: 22px; }
+
+.pile { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.slip {
+  align-self: flex-start;
+  max-width: 100%;
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 9px 18px;
+}
+.slip b { font-family: var(--serif); font-size: 17px; font-weight: 600; }
+
+/* Each card sits a little further in than the one above, like a pile. */
+.pile-cards { display: flex; flex-direction: column; gap: 14px; }
+.pile-cards > :nth-child(2) { margin-left: 8px; }
+.pile-cards > :nth-child(n + 3) { margin-left: 16px; }
+.queue-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px 18px; }
+.queue-card h3 { font-size: 16.5px; line-height: 1.3; }
+.queue-card .tags { margin-top: 6px; }
+.queue-card .actions { display: flex; gap: 6px; align-items: center; }
+.list-empty { padding: 22px 20px; text-align: center; color: var(--ink-2); }
+
+.thumb {
+  width: 38px; aspect-ratio: 3 / 4;
+  border-radius: 3px;
+  background: var(--card-sunk);
+  border: 1px solid var(--card-line);
+  overflow: hidden;
+  display: grid; place-items: center;
+  color: var(--ink-3);
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.thumb svg { width: 16px; height: 16px; opacity: 0.7; }
 
 .url-row { display: flex; gap: 8px; }
 .url-row .input { flex: 1; }
@@ -625,8 +901,8 @@ kbd {
   align-items: center;
   margin-top: 16px;
   padding: 13px 16px;
-  background: var(--sunk);
-  border: 1px solid var(--rule);
+  background: var(--card-sunk);
+  border: 1px solid var(--card-sunk-line);
   border-radius: var(--r-md);
 }
 .activity-text { min-width: 0; }
@@ -646,40 +922,46 @@ kbd {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ---- progress ----------------------------------------------------------- */
+/* ---- progress: graph paper, the charts on index cards ---------------------------- */
 
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
-.figure { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-lg); padding: 14px 18px; box-shadow: var(--shadow-sm); }
-.figure b { display: block; font-family: var(--serif); font-weight: 450; font-size: 30px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.figure b small { font-size: 18px; color: var(--ink-3); letter-spacing: 0; }
-.figure span { font-size: 13px; color: var(--ink-3); }
+.sheet--graph {
+  padding: 38px;
+  background:
+    linear-gradient(var(--graph-major) 1px, transparent 1px) 0 0 / 95px 95px,
+    linear-gradient(90deg, var(--graph-major) 1px, transparent 1px) 0 0 / 95px 95px,
+    linear-gradient(var(--graph-minor) 1px, transparent 1px) 0 0 / 19px 19px,
+    linear-gradient(90deg, var(--graph-minor) 1px, transparent 1px) 0 0 / 19px 19px,
+    var(--page-paper);
+}
+/* The figures are written straight onto the paper, on its lines. */
+.figures { display: flex; flex-wrap: wrap; gap: 19px 38px; margin-bottom: 38px; }
+.figure b { display: block; height: 38px; font-family: var(--serif); font-weight: 500; font-size: 40px; line-height: 44px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.figure b small { font-size: 20px; color: var(--ink-3); letter-spacing: 0; }
+.figure span { display: block; font-size: 12.5px; line-height: 19px; color: var(--ink-3); }
 
-/* The grid is only as wide as six months of weeks, so it sits beside the
-   day-by-day list rather than stranding half a page of empty card. */
-.progress-columns { display: grid; grid-template-columns: max-content minmax(260px, 1fr); gap: 18px; align-items: stretch; }
-.progress-columns .card + .card { margin-top: 0; }
+.progress-columns { display: grid; grid-template-columns: max-content minmax(300px, 1fr); gap: 28px; align-items: start; }
 @media (max-width: 1150px) { .progress-columns { grid-template-columns: 1fr; } }
-#sticking-card { margin-top: 18px; }
+.progress-charts { display: flex; flex-direction: column; gap: 20px; }
 
-.days { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.days { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
 .days li { display: grid; grid-template-columns: 96px minmax(0, 1fr) 40px; align-items: center; gap: 14px; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .days li span:last-child { text-align: right; }
-.days .bar { position: relative; height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; }
+.days .bar { position: relative; height: 8px; border-radius: 4px; background: var(--card-sunk); overflow: hidden; }
 .days .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
 .days .bar .answered { background: var(--rule-strong); }
 .days .bar .right { background: var(--good); }
 .days-key { display: flex; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--ink-3); }
 .days-key i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
 
-.sticking { list-style: none; margin: 8px 0 0; padding: 0; }
-.sticking li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.sticking { list-style: none; margin: 0; padding: 0; }
+.sticking li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--page-rule); }
 .sticking li:last-child { border-bottom: 0; }
 .sticking .q { font-family: var(--serif); font-size: 15.5px; line-height: 1.4; }
 .sticking .where { display: block; font-family: var(--sans); font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
 .sticking .misses { font-size: 12.5px; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* The reading grid: a calendar heatmap, one hue light to dark. */
-.heatmap-scroll { margin-top: 14px; overflow-x: auto; padding: 4px; margin-left: -4px; }
+.heatmap-scroll { margin-top: 0; overflow-x: auto; padding: 4px; margin-left: -4px; }
 .heatmap-body { display: flex; gap: 6px; }
 .heatmap-months {
   display: grid;
@@ -725,7 +1007,36 @@ kbd {
 .heat-tip div + div { margin-top: 5px; }
 .heat-tip ul { margin: 6px 0 0; padding-left: 16px; }
 
-/* ---- settings ----------------------------------------------------------- */
+/* ---- settings: one sheet, like a letter ----------------------------------------- */
+
+.settings-columns { display: grid; grid-template-columns: minmax(0, 720px) minmax(280px, 340px); gap: 34px; align-items: start; }
+@media (max-width: 1150px) { .settings-columns { grid-template-columns: 1fr; } }
+.settings-side { display: flex; flex-direction: column; gap: 20px; }
+
+/* A red margin line, as on a letter pad; the form is written to its right. */
+.sheet--letter {
+  padding: 34px 40px 30px 100px;
+  background:
+    linear-gradient(90deg, transparent 69px, var(--card-rule) 69px 70px, transparent 70px),
+    var(--card-paper);
+}
+.sheet--letter h2 { font-size: 22px; margin-bottom: 6px; }
+.sheet--letter h2:not(:first-child) { margin-top: 36px; }
+.sheet--letter .form-row { border-top-color: var(--page-rule); }
+.sheet--letter h2 + .form-row { border-top: 0; padding-top: 8px; }
+
+.wood-choice { display: grid; grid-template-columns: repeat(auto-fill, 36px); gap: 7px; max-width: 300px; }
+.wood-choice button {
+  width: 36px; height: 36px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-size: cover;
+  box-shadow: 0 1px 2px rgba(40, 25, 5, 0.3);
+  cursor: pointer;
+}
+.wood-choice button[aria-checked="true"] { border-color: var(--card); box-shadow: 0 0 0 2px var(--ink); }
+#wood-name b { font-weight: 600; color: var(--ink); }
 
 .checks { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .checks li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
@@ -745,54 +1056,124 @@ kbd {
 
 /* ---- study -------------------------------------------------------------- */
 
+/* The study view is a notebook on a leather cover: the paper on a page to
+   the left, the questions as a stack of index cards to the right. The
+   textures are generated (scripts/make_textures.py) and tile seamlessly. */
+
 /* Reading is the one place the sidebar gets out of the way. */
 body.is-studying .rail { display: none; }
 
 .view--study.is-active {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 6px var(--quiz-width, clamp(360px, 34vw, 480px));
-  padding: 0;
+  grid-template-columns: minmax(0, 1fr) 26px var(--quiz-width, clamp(360px, 32vw, 460px));
+  grid-template-rows: 62px minmax(0, 1fr);
+  grid-template-areas: "bar bar bar" "reader split quiz";
+  padding: 14px 32px 22px 30px; /* clear of the stitching */
   overflow: hidden;
 }
 
-.reader { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--page-well); }
-.reader-bar {
-  display: flex; align-items: center; gap: 8px;
-  height: 52px; padding: 0 12px;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--rule);
+.study-bar {
+  grid-area: bar;
+  display: flex; align-items: center; gap: 10px;
+  position: relative; z-index: 1;
 }
-.reader-bar h2 {
-  flex: 1; min-width: 0;
-  font-size: 15.5px; font-weight: 500;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.study-bar h2 {
+  /* The paper label (.cover-label), holding the paper's title. */
+  flex: 0 1 auto; min-width: 0;
+  margin: 0 auto 0 8px;
+  line-height: 42px;
+  font-size: 18px; font-weight: 500;
+  color: var(--ink);
+  text-overflow: ellipsis;
+}
+.study-bar h2:empty { visibility: hidden; }
+.study-bar .btn, .btn--leather, .segmented--leather button {
+  height: 38px;
+  padding: 0 15px 0 12px;
+  border-radius: var(--r-md);
+  /* Pressed into the cover: darkened leather, pinned to the window so its
+     grain lines up with the leather around it. The inner shade is a
+     gradient, not an inset shadow — over an image, inset shadows draw
+     stray diagonals on some software renderers. */
+  --press: var(--leather-btn);
+  background:
+    linear-gradient(rgba(255, 240, 215, 0.10), rgba(255, 240, 215, 0) 55%),
+    linear-gradient(var(--press), var(--press)),
+    var(--leather-bg);
+  border: 1px solid var(--leather-btn-edge);
+  color: var(--on-leather-strong);
+  font-size: 14px; font-weight: 500;
+  box-shadow: var(--shadow-on-leather);
+}
+.cover-bar .btn--leather, .cover-bar .segmented--leather button, .search--leather .input { background-attachment: scroll; }
+.study-bar .btn:hover, .btn--leather:hover, .segmented--leather button:hover { --press: var(--leather-btn-hover); }
+.study-bar .btn--icon { width: 38px; padding: 0; }
+.study-bar .btn svg { width: 17px; height: 17px; }
+
+/* The paper, on the left-hand page. */
+.reader {
+  grid-area: reader;
+  position: relative;
+  display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  background: var(--page-paper);
+  border-radius: 6px;
+  box-shadow: var(--page-edges);
+  overflow: hidden;
 }
 .reader-tools {
-  display: flex; align-items: center; gap: 4px;
-  height: 42px; padding: 0 10px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--rule);
-  font-size: 13px; color: var(--ink-2);
+  display: flex; align-items: center; gap: 2px;
+  height: 54px; margin: 0 18px; flex: none;
+  border-bottom: 1px solid var(--page-rule);
+  font-size: 14px; color: var(--page-ink);
 }
-.reader-tools .sep { width: 1px; height: 20px; background: var(--rule); margin: 0 6px; }
-.page-box { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.page-box .input { width: 48px; height: 28px; padding: 0 4px; text-align: center; font-size: 13px; }
-.zoom-label { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
-.find-box { position: relative; margin-left: auto; flex: 0 1 220px; min-width: 110px; }
-.find-box .input { height: 28px; font-size: 13px; padding-left: 30px; }
-.find-box svg { position: absolute; left: 9px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); color: var(--ink-3); }
-.find-count { min-width: 64px; text-align: right; color: var(--ink-3); font-size: 12px; }
+.reader-tools .btn { height: 32px; font-size: 14px; color: var(--page-ink); border-radius: 6px; }
+.reader-tools .btn--icon { width: 32px; }
+.reader-tools .btn svg { width: 17px; height: 17px; }
+.reader-tools .btn:hover { background: color-mix(in srgb, var(--page-ink) 10%, var(--page)); color: var(--ink); }
+.reader-tools .sep { width: 1px; height: 22px; background: var(--page-rule); margin: 0 10px; flex: none; }
+.reader-tools .input {
+  height: 32px; font-size: 14px;
+  background: color-mix(in srgb, var(--field) 70%, var(--page));
+  border-color: var(--page-rule);
+  border-radius: 6px;
+}
+.page-box { display: inline-flex; align-items: center; gap: 8px; margin-left: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.page-box .input { width: 46px; padding: 0 4px; text-align: center; }
+.zoom-label { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+#zoom-fit { padding: 0 10px 0 8px; gap: 6px; }
+.find-box { position: relative; margin-left: auto; flex: 0 1 230px; min-width: 120px; }
+.find-box .input { padding-left: 32px; }
+.find-box svg { position: absolute; left: 10px; top: 50%; width: 15px; height: 15px; transform: translateY(-50%); color: var(--page-ink); }
+.find-count { margin-left: 10px; color: var(--page-ink); font-size: 13px; white-space: nowrap; }
+.find-count:empty { display: none; }
+
+/* Slim scroll bars in the page's own ink, no arrow buttons. */
+.scroller::-webkit-scrollbar { width: 12px; height: 12px; }
+.scroller::-webkit-scrollbar-track, .scroller::-webkit-scrollbar-corner { background: transparent; }
+.scroller::-webkit-scrollbar-button { display: none; }
+.scroller::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--page-ink) 32%, var(--page)) padding-box;
+  border: 3px solid transparent;
+  border-radius: 6px;
+}
+.tab-panel::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--page-ink) 26%, var(--card)); }
+.scroller::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--page-ink) 55%, var(--page)); }
 
 .reader-stage { position: relative; flex: 1; min-height: 0; }
 .pdf-scroll { position: absolute; inset: 0; overflow: auto; }
-.pdf-scroll .pdfViewer { padding: 18px 0 40px; }
+.pdf-scroll .pdfViewer { padding: 22px 0 40px; }
 .pdf-scroll .pdfViewer .page {
-  margin: 0 auto 16px;
+  margin: 0 auto 18px;
   border: 0;
-  border-radius: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 8px 24px -12px rgba(0, 0, 0, 0.35);
+  border-radius: 1px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 3px 10px rgba(80, 55, 20, 0.16);
   /* pdf_viewer.css draws the page frame with a border image; ours is a shadow */
   border-image: none;
+}
+/* At night the white pages are dimmed a touch, as a lamp would. */
+:root[data-theme="dark"] .pdf-scroll .pdfViewer .page { filter: brightness(0.88) sepia(0.06); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pdf-scroll .pdfViewer .page { filter: brightness(0.88) sepia(0.06); }
 }
 /* pdf.js's own find highlight is a strong blue; ours is a highlighter pen,
    a little stronger on the match you jumped to. */
@@ -803,15 +1184,15 @@ body.is-studying .rail { display: none; }
     border-radius: 2px;
   }
 }
-.reader-empty { margin: auto; padding: 40px; text-align: center; color: var(--ink-2); max-width: 40ch; }
-.reader-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-3); pointer-events: none; }
+.reader-empty { margin: auto; padding: 40px; text-align: center; color: var(--page-ink); max-width: 40ch; }
+.reader-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--page-ink); pointer-events: none; }
 
-/* A saved web article, set as a page of its own. */
-.article-scroll { position: absolute; inset: 0; overflow: auto; background: var(--bg); }
+/* A saved web article, set straight onto the page. */
+.article-scroll { position: absolute; inset: 0; overflow: auto; }
 .article {
   max-width: 44rem;
   margin: 0 auto;
-  padding: 44px 40px 80px;
+  padding: 40px 40px 80px;
   font-family: var(--serif);
   font-size: 18px;
   line-height: 1.7;
@@ -824,50 +1205,68 @@ body.is-studying .rail { display: none; }
 .article .source a { color: var(--accent); overflow-wrap: anywhere; }
 .article mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 1px 0; }
 
-.splitter { cursor: col-resize; background: var(--rule); position: relative; }
-.splitter::after { content: ""; position: absolute; inset: 0 -4px; }
-.splitter:hover, .splitter.is-dragging { background: var(--accent); }
+/* The gap between page and cards is the handle. */
+.splitter { grid-area: split; cursor: col-resize; position: relative; }
+.splitter::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 4px; height: 44px; margin: -22px 0 0 -2px; border-radius: 2px;
+  background: var(--on-leather); opacity: 0; transition: opacity 140ms ease;
+}
+.splitter:hover::after, .splitter.is-dragging::after { opacity: 0.45; }
 body.is-resizing { cursor: col-resize; user-select: none; }
 body.is-resizing iframe, body.is-resizing .reader-stage { pointer-events: none; }
 
-.quiz { background: var(--surface); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+/* The questions: tabs above an index card, the cards to come stacked behind. */
+.quiz { grid-area: quiz; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-right: 14px; }
 
-.tabs {
-  display: flex; align-items: flex-end; gap: 4px;
-  height: 52px; padding: 0 22px;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--rule);
-}
+.tabs { display: flex; align-items: flex-end; gap: 4px; height: 34px; padding-left: 18px; flex: none; }
 .tab {
-  appearance: none; border: 0; background: none; cursor: pointer;
-  height: 100%;
-  padding: 0 12px;
-  border-bottom: 2px solid transparent;
+  appearance: none; border: 0; cursor: pointer;
+  height: 30px; padding: 0 16px;
+  border-radius: 7px 7px 0 0;
+  background: var(--tab-idle);
   font-size: 14px; font-weight: 500;
-  color: var(--ink-2);
-  transition: color 140ms ease, border-color 140ms ease;
+  color: var(--tab-idle-ink);
+  box-shadow: inset 0 -3px 4px rgba(0, 0, 0, 0.08);
+  transition: color 140ms ease;
 }
 .tab:hover { color: var(--ink); }
-.tab.is-active { color: var(--ink); border-bottom-color: var(--accent); }
+.tab.is-active { height: 34px; background: var(--card); color: var(--ink); font-weight: 600; box-shadow: none; }
 .tab-dot { display: inline-block; width: 6px; height: 6px; margin-left: 7px; border-radius: 50%; background: var(--warn); vertical-align: 2px; }
 
+.quiz-card {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+  margin-bottom: 14px;
+  background: var(--card);
+  border-radius: 6px;
+  box-shadow: var(--stack, 0 0 transparent), 0 10px 18px var(--cover-shadow);
+  transition: box-shadow 220ms ease;
+}
 .tab-panel { flex: 1; min-height: 0; overflow-y: auto; }
 
-.quiz-progress { display: flex; align-items: center; gap: 12px; padding: 18px 28px 0; }
-#quiz-dots { flex: 1; display: flex; gap: 3px; }
-.quiz-count { font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dot { flex: 1; max-width: 36px; height: 4px; border-radius: 2px; background: var(--rule); transition: background 200ms ease; }
-.dot.is-right { background: var(--good); }
-.dot.is-wrong { background: var(--accent); }
-.dot.is-current { background: var(--ink); }
+.quiz-progress {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0; padding: 16px 22px 12px;
+  border-bottom: 1px solid var(--card-rule);
+}
+#quiz-dots { flex: 1; display: flex; gap: 5px; }
+.quiz-count { font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dot { width: 8px; height: 8px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--card-line); transition: background 200ms ease; }
+.dot.is-right { background: var(--good); box-shadow: none; }
+.dot.is-wrong { background: var(--accent); box-shadow: none; }
+.dot.is-current { box-shadow: inset 0 0 0 1.5px var(--ink); }
 
-.quiz-body { padding: 20px 28px 32px; }
+.quiz-body { padding: 18px 22px 24px; }
 .level {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  height: 24px; padding: 0 10px;
+  border: 1px solid currentColor; border-radius: 12px;
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ink-3);
 }
-.level i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.level i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.level span { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .level[data-level="overview"] { color: #3d6a8a; }
 .level[data-level="approach"] { color: var(--good); }
 .level[data-level="evidence"] { color: var(--warn); }
@@ -879,39 +1278,51 @@ body.is-resizing iframe, body.is-resizing .reader-stage { pointer-events: none; 
   font-family: var(--serif);
   font-size: 22px;
   font-weight: 450;
-  line-height: 1.38;
+  line-height: 1.36;
   letter-spacing: -0.01em;
-  margin: 10px 0 22px;
+  margin: 12px 0 20px;
   text-wrap: pretty;
 }
 
-#answer-stage .textarea { min-height: 120px; font-size: 15px; }
+#answer-stage .textarea { min-height: 120px; font-size: 15px; background: var(--card-sunk); border-color: var(--card-sunk-line); }
 #answer-stage .row { justify-content: space-between; }
 
 #answer-block { animation: rise 280ms var(--ease) both; }
-.answer p:not(.eyebrow) { font-family: var(--serif); font-size: 17px; line-height: 1.6; margin-top: 8px; text-wrap: pretty; }
-.your-answer { margin-bottom: 18px; padding: 12px 14px; border-radius: var(--r-md); background: var(--sunk); font-size: 14px; color: var(--ink-2); white-space: pre-wrap; }
-.your-answer .eyebrow { display: block; margin-bottom: 4px; }
+.answer p:not(.eyebrow) { font-family: var(--serif); font-size: 17px; line-height: 1.55; margin-top: 6px; text-wrap: pretty; }
+.your-answer {
+  margin-bottom: 20px; padding: 12px 16px;
+  border-radius: var(--r-md);
+  background: var(--card-sunk); border: 1px solid var(--card-sunk-line);
+  font-family: var(--serif); font-style: italic; font-size: 15px; line-height: 1.55;
+  color: var(--ink-2); white-space: pre-wrap;
+}
+.your-answer .eyebrow { display: block; margin-bottom: 4px; font-style: normal; }
 
 .evidence {
-  margin: 20px 0 0;
-  padding: 14px 16px 12px;
-  background: var(--sunk);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--warn);
-  border-radius: 0 var(--r-md) var(--r-md) 0;
+  margin: 16px 0 0;
+  padding: 12px 16px 10px;
+  background: color-mix(in srgb, var(--page) 55%, var(--card));
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-md);
 }
 .evidence p {
   font-family: var(--serif);
-  font-size: 15px;
+  font-style: italic;
+  font-size: 14.5px;
   line-height: 1.55;
   color: var(--ink-2);
 }
 .evidence.is-clamped p { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
-.evidence .row { margin-top: 10px; gap: 16px; }
+.evidence .row { margin-top: 8px; gap: 16px; }
+.evidence .btn--link { font-size: 13.5px; }
 
-.row--mark { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rule); }
-.row--mark .btn { height: 42px; }
+/* Marking sits on the leather, under the card. */
+.row--mark { display: flex; gap: 12px; flex: none; margin-top: 12px; }
+.row--mark .btn { height: 44px; padding: 0 18px; font-size: 15px; font-weight: 600; box-shadow: var(--shadow-on-leather); }
+.row--mark .btn--good { background: var(--good); border-color: var(--good); color: var(--bg); }
+.row--mark .btn--good:hover { background: color-mix(in srgb, var(--good) 85%, #000); border-color: transparent; }
+.row--mark .btn--bad { background: var(--card); border-color: var(--card-line); color: var(--accent); }
+.row--mark kbd { background: transparent; border-color: currentColor; color: inherit; opacity: 0.7; }
 
 #verdict {
   margin: 0 0 18px;
@@ -920,8 +1331,8 @@ body.is-resizing iframe, body.is-resizing .reader-stage { pointer-events: none; 
   font-size: 14.5px;
   line-height: 1.5;
   animation: rise 280ms ease both;
-  background: var(--sunk);
-  border: 1px solid var(--rule);
+  background: var(--card-sunk);
+  border: 1px solid var(--card-sunk-line);
 }
 #verdict .eyebrow { margin-bottom: 4px; }
 #verdict.is-correct { background: var(--good-soft); border-color: transparent; }
@@ -932,13 +1343,13 @@ body.is-resizing iframe, body.is-resizing .reader-stage { pointer-events: none; 
 #verdict.is-incorrect .eyebrow { color: var(--accent); }
 #verdict.is-thinking { color: var(--ink-2); }
 
-.quiz-done { padding: 40px 28px; }
+.quiz-done { padding: 34px 22px; }
 .score { font-family: var(--serif); font-size: 52px; line-height: 1; margin: 12px 0 6px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .missed { margin: 22px 0 26px; padding-left: 18px; color: var(--ink-2); font-family: var(--serif); font-size: 15px; line-height: 1.5; }
 .missed li { margin-bottom: 6px; }
 .missed .eyebrow { margin-left: -18px; margin-bottom: 8px; list-style: none; font-family: var(--sans); }
 
-.no-questions { margin: 22px 28px; }
+.no-questions { margin: 22px; }
 .no-questions .meta { max-width: 46ch; }
 
 .tab-panel--notes { display: flex; flex-direction: column; padding: 18px 22px 22px; gap: 10px; }
@@ -952,6 +1363,8 @@ body.is-resizing iframe, body.is-resizing .reader-stage { pointer-events: none; 
   line-height: 1.65;
   padding: 16px 18px;
   resize: none;
+  background: var(--card-sunk);
+  border-color: var(--card-sunk-line);
 }
 
 /* ---- overlays ----------------------------------------------------------- */
@@ -988,6 +1401,3 @@ body.is-resizing iframe, body.is-resizing .reader-stage { pointer-events: none; 
 }
 .dropzone-title { font-family: var(--serif); font-size: 26px; letter-spacing: -0.015em; margin-top: 8px; }
 
-@media (max-width: 1100px) {
-  .today-grid { grid-template-columns: 1fr; }
-}

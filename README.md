@@ -97,12 +97,19 @@ Installed, it's in the Start menu. From a checkout, `DoTheReading.cmd` (or
 `npm start --prefix app`) opens it — the paper on the left, its questions
 on the right.
 
+It's dressed as a reading journal: every screen sits on a stitched leather
+cover, with the sections as paper index tabs down a wooden rail beside it,
+and the rail keeps count of how many days in a row you've read.
+
 - **Today** suggests a paper: something with questions you haven't
   studied, then anything you kept only for reading, otherwise whatever you
   looked at longest ago. "Suggest another" reshuffles, and the review pile
-  is one click from the same screen.
+  is one click from the same screen, beside this week (Monday to Sunday,
+  a circle for each day you read or answered something).
 - **Study** shows the paper beside the current question, with the sidebar
   out of the way; drag the divider to resize (double-click resets it).
+  A paper opens on its notes, so you can read and jot before answering;
+  the review pile opens straight on the questions.
   Reveal the answer and you get the supporting quote; "Show in the paper"
   scrolls to that passage and highlights it, in a PDF or a saved web
   article. The reader has its own page, zoom and find controls (`Ctrl+F`,
@@ -113,7 +120,7 @@ on the right.
   a written exercise: type your answer, the local model marks it
   correct/partly/incorrect with a sentence of feedback, then you still
   mark yourself. ~10s per answer once the model is loaded.
-- **Library** lists every processed paper with its score and review count,
+- **Library** shows every paper as an index card with its score and review count,
   and can show all questions without quizzing. Search by title, or filter
   to unread papers or ones with questions to review.
 - **Inbox** lists PDFs waiting, and "Process now" runs the nightly job
@@ -127,8 +134,9 @@ on the right.
   questions per paper, a free-text steer added to every generation prompt
   ("I'm a wet-lab biologist: favour experimental design over the maths"),
   and the nightly-run toggle. These live in `~/PaperStudy/settings.json`,
-  so the 02:00 job uses the same choices. The light/dark theme is set there
-  too; it follows the system unless you pick one.
+  so the 02:00 job uses the same choices. The light/dark theme (it follows
+  the system unless you pick one) and the wood of the rail (fourteen, cherry
+  by default) are chosen there too, and kept per machine.
 
 **On picking a smaller model:** the app lists each model's size and a
 plain-language quality note, because the trade-off is real. Verification
@@ -240,6 +248,9 @@ you get them right.
   question files itself.
 - `app/` — the Electron app: `main.js` (window, spawns `study_api.py`),
   `preload.js` (the only bridge), `renderer/` (UI).
+- `scripts/make_textures.py` — draws the leather, paper and wood textures
+  in `app/renderer/textures/` (numpy and Pillow; run it from the repo root
+  after changing one). Every tile repeats seamlessly.
 - `DoTheReading.cmd` — double-click launcher for the app.
 - `settings.py` — reads/writes `~/PaperStudy/settings.json` (model,
   question count, prompt guidance). Standard library only.

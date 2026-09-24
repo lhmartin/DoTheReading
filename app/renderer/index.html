@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <title>DoTheReading</title>
+    <!-- pdf.js's viewer styles are global and claim .page and .spread (as in
+         ".spread .page"), so the app's own classes avoid those names. -->
     <link rel="stylesheet" href="../node_modules/pdfjs-dist/web/pdf_viewer.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -13,94 +15,97 @@
         <symbol id="i-today" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5v13c-3.5-2-6.5-2-9-1z"/><path d="M21 5.5c-2.5-1-5.5-1-9 1v13c3.5-2 6.5-2 9-1z"/></symbol>
         <symbol id="i-library" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="4" height="16" rx="1"/><rect x="9.5" y="4" width="4" height="16" rx="1"/><path d="m15 5.3 3.4-.9 3.1 14.9-3.4.9z"/></symbol>
         <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
-        <symbol id="i-progress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M7 16v-4M12 16V5M17 16v-8"/></symbol>
-        <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+        <symbol id="i-progress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M7 16v-4"/><path d="M12 16V5"/><path d="M17 16v-8"/></symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10"/><path d="M18 7h2"/><path d="M4 17h4"/><path d="M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
         <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.57 5.45 L16.82 6.75 L18.50 8.75 L19.39 11.20 L19.39 13.80 L18.50 16.25 L16.82 18.25 L14.57 19.55 L12.00 20.00 L9.43 19.55 L7.18 18.25 L5.50 16.25 L4.61 13.80 L4.61 11.20 L5.50 8.75 L7.18 6.75 L9.43 5.45"/><path d="M5.44 3.84 L9.43 5.45 L7.41 9.25"/></symbol>
         <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
-        <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 16.5h5"/></symbol>
-        <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></symbol>
-        <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
-        <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></symbol>
-        <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+        <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5"/><path d="M8.5 13h7"/><path d="M8.5 16.5h5"/></symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
+        <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></symbol>
+        <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></symbol>
         <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
         <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 12h12"/></symbol>
-        <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 12h12M12 6v12"/></symbol>
-        <symbol id="i-fit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 12h12"/><path d="M12 6v12"/></symbol>
+        <symbol id="i-fit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16"/><path d="M7 9l-3 3 3 3"/><path d="M17 9l3 3-3 3"/></symbol>
         <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></symbol>
         <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
-        <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
-        <symbol id="i-quote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l8-8-4-4-8 8z"/><path d="m13.5 6.5 4 4M16 4l4 4"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></symbol>
+        <symbol id="i-quote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l8-8-4-4-8 8z"/><path d="m13.5 6.5 4 4"/><path d="M16 4l4 4"/></symbol>
       </defs>
     </svg>
 
-    <nav class="rail">
-      <div class="mark">Do<span>The</span>Reading</div>
-      <button class="rail-btn is-active" data-view="today"><svg><use href="#i-today"/></svg><span>Today</span></button>
-      <button class="rail-btn" data-view="library"><svg><use href="#i-library"/></svg><span>Library</span></button>
-      <button class="rail-btn" data-view="inbox"><svg><use href="#i-inbox"/></svg><span>Inbox</span><em class="pip" id="inbox-pip" hidden></em></button>
-      <button class="rail-btn" data-view="progress"><svg><use href="#i-progress"/></svg><span>Progress</span></button>
-      <button class="rail-btn" data-view="settings"><svg><use href="#i-settings"/></svg><span>Settings</span><em class="pip pip--warn" id="settings-pip" hidden>!</em></button>
-      <button class="rail-btn rail-btn--foot" id="refresh" title="Reload the library"><svg><use href="#i-refresh"/></svg><span>Refresh</span></button>
+    <nav class="rail" aria-label="Sections">
+      <div class="mark">Do <span>the</span> Reading</div>
+      <div class="rail-tabs">
+        <button class="rail-btn is-active" data-view="today"><svg><use href="#i-today"/></svg><span>Today</span></button>
+        <button class="rail-btn" data-view="library"><svg><use href="#i-library"/></svg><span>Library</span></button>
+        <button class="rail-btn" data-view="inbox"><svg><use href="#i-inbox"/></svg><span>Inbox</span><em class="pip" id="inbox-pip" hidden></em></button>
+        <button class="rail-btn" data-view="progress"><svg><use href="#i-progress"/></svg><span>Progress</span></button>
+        <button class="rail-btn" data-view="settings"><svg><use href="#i-settings"/></svg><span>Settings</span><em class="pip pip--warn" id="settings-pip" hidden>!</em></button>
+      </div>
+      <div class="streak" id="streak" hidden>
+        <p><b id="streak-count"></b> <span id="streak-label"></span></p>
+        <div class="streak-week" id="streak-week"></div>
+      </div>
+      <button class="refresh" id="refresh" title="Reload the library"><svg><use href="#i-refresh"/></svg><span>Refresh</span></button>
     </nav>
 
     <main>
-      <!-- Today -->
-      <section class="view is-active" id="view-today">
-        <header class="masthead masthead--hero">
-          <p class="eyebrow" id="today-date"></p>
-          <h1>Do the reading.</h1>
+      <!-- Today: an open spread. The day's paper on the left-hand page, the
+           rest of the day on the right. -->
+      <section class="view view--cover is-active" id="view-today">
+        <header class="cover-bar">
+          <div class="cover-label"><h1>Do the reading.</h1><span id="today-date"></span></div>
         </header>
-        <div class="clip-offer" id="clip-offer" hidden>
-          <span class="meta">Add the link on your clipboard?</span>
-          <span class="clip-url" id="clip-url"></span>
-          <button class="btn btn--sm btn--primary" id="clip-add">Add it</button>
-          <button class="btn btn--sm btn--ghost" id="clip-dismiss">No thanks</button>
-        </div>
 
-        <div class="today-grid">
-          <article class="card feature feature--empty" id="suggested-card">
-            <div class="cover" id="suggested-cover"></div>
-            <div class="feature-body">
-              <p class="eyebrow">Today's paper</p>
-              <h2 id="suggested-title">Loading your library…</h2>
-              <p class="meta" id="suggested-meta"></p>
-              <div class="teaser" id="suggested-teaser" hidden>
-                <p class="eyebrow">Starts with</p>
-                <p id="suggested-question"></p>
-              </div>
-              <div class="row">
-                <button class="btn btn--primary" id="start-suggested" disabled>Start reading</button>
-                <button class="btn btn--ghost" id="shuffle" disabled>Suggest another</button>
-              </div>
+        <div class="today-spread">
+          <article class="leaf leaf--left title-page" id="suggested-card">
+            <p class="eyebrow">Today's paper</p>
+            <span class="title-rule" aria-hidden="true"></span>
+            <h2 id="suggested-title">Loading your library…</h2>
+            <p class="meta" id="suggested-meta"></p>
+            <div class="row">
+              <button class="btn btn--primary btn--lg" id="start-suggested" disabled>Start reading</button>
+              <button class="btn btn--ghost btn--lg" id="shuffle" disabled>Suggest another</button>
             </div>
           </article>
 
-          <div class="today-side">
-            <article class="card side-card" id="review-card" hidden>
+          <div class="leaf leaf--right leaf--dotted">
+            <div class="clip-offer" id="clip-offer" hidden>
+              <span class="meta">Add the link on your clipboard?</span>
+              <span class="clip-url" id="clip-url"></span>
+              <button class="btn btn--sm btn--primary" id="clip-add">Add it</button>
+              <button class="btn btn--sm btn--ghost" id="clip-dismiss">No thanks</button>
+            </div>
+            <div class="teaser" id="suggested-teaser" hidden>
+              <p class="eyebrow">Starts with</p>
+              <p id="suggested-question"></p>
+            </div>
+            <article class="index-card index-card--stack" id="review-card" hidden>
               <p class="eyebrow">Review pile</p>
-              <p class="big-number" id="review-count">0</p>
-              <p class="meta" id="review-title">questions you missed last time</p>
+              <div class="big-row"><p class="big-number" id="review-count">0</p><p class="meta" id="review-title">questions you missed last time</p></div>
               <div class="row"><button class="btn" id="start-review">Work through them</button></div>
             </article>
-            <article class="card side-card" id="week-card">
+            <section class="index-card week" id="week-card">
               <p class="eyebrow">This week</p>
-              <p class="big-number" id="week-count">0</p>
-              <p class="meta" id="week-meta"></p>
-            </article>
+              <div class="week-days" id="week-days"></div>
+              <p class="week-meta" id="week-meta"></p>
+            </section>
+            <section id="recent"></section>
           </div>
         </div>
-        <div id="recent"></div>
       </section>
 
       <!-- Study: the paper beside the current question -->
       <section class="view view--study" id="view-study">
+        <header class="study-bar">
+          <button class="btn btn--ghost btn--sm" id="leave-study" title="Back (Esc)"><svg><use href="#i-back"/></svg>Done</button>
+          <h2 id="study-title"></h2>
+          <button class="btn btn--sm" id="mark-read" title="Mark this paper as read">Mark as read</button>
+          <button class="btn btn--ghost btn--sm btn--icon" id="open-pdf" title="Open outside the app"><svg><use href="#i-external"/></svg></button>
+        </header>
         <div class="reader">
-          <div class="reader-bar">
-            <button class="btn btn--ghost btn--sm" id="leave-study" title="Back (Esc)"><svg><use href="#i-back"/></svg>Done</button>
-            <h2 id="study-title"></h2>
-            <button class="btn btn--sm" id="mark-read" title="Mark this paper as read">Mark as read</button>
-            <button class="btn btn--ghost btn--sm btn--icon" id="open-pdf" title="Open outside the app"><svg><use href="#i-external"/></svg></button>
-          </div>
           <div class="reader-tools" id="reader-tools" hidden>
             <button class="btn btn--ghost btn--sm btn--icon" id="page-prev" title="Previous page"><svg><use href="#i-up"/></svg></button>
             <button class="btn btn--ghost btn--sm btn--icon" id="page-next" title="Next page"><svg><use href="#i-down"/></svg></button>
@@ -114,8 +119,8 @@
             <span class="find-count" id="find-count"></span>
           </div>
           <div class="reader-stage" id="reader-stage">
-            <div class="pdf-scroll" id="pdf-scroll"><div class="pdfViewer" id="pdf-viewer"></div></div>
-            <div class="article-scroll" id="article-scroll" hidden><article class="article" id="article"></article></div>
+            <div class="pdf-scroll scroller" id="pdf-scroll"><div class="pdfViewer" id="pdf-viewer"></div></div>
+            <div class="article-scroll scroller" id="article-scroll" hidden><article class="article" id="article"></article></div>
             <p class="reader-empty" id="reader-empty" hidden>Nothing saved to read for this one, only its questions.</p>
             <p class="reader-loading" id="reader-loading" hidden>Opening…</p>
           </div>
@@ -125,11 +130,12 @@
 
         <aside class="quiz">
           <div class="tabs" role="tablist">
-            <button class="tab is-active" data-tab="questions" role="tab">Questions</button>
-            <button class="tab" data-tab="notes" role="tab">Notes<em class="tab-dot" id="notes-dot" hidden></em></button>
+            <button class="tab is-active" data-tab="notes" role="tab">Notes<em class="tab-dot" id="notes-dot" hidden></em></button>
+            <button class="tab" data-tab="questions" role="tab">Questions</button>
           </div>
 
-          <div class="tab-panel" id="tab-questions">
+          <div class="quiz-card" id="quiz-card">
+          <div class="tab-panel scroller" id="tab-questions" hidden>
             <div class="panel panel--note no-questions" id="no-questions" hidden>
               <p class="eyebrow">No questions yet</p>
               <p class="meta">This paper was added for reading, so nothing has been written to quiz you on.
@@ -185,10 +191,6 @@
                     <button class="btn btn--link" id="evidence-more" hidden>Show the whole quote</button>
                   </div>
                 </blockquote>
-                <div class="row row--mark">
-                  <button class="btn btn--good" id="mark-right">Got it <kbd>Y</kbd></button>
-                  <button class="btn btn--bad" id="mark-wrong">Missed it <kbd>N</kbd></button>
-                </div>
               </div>
             </div>
 
@@ -201,236 +203,250 @@
             </div>
           </div>
 
-          <div class="tab-panel tab-panel--notes" id="tab-notes" hidden>
+          <div class="tab-panel tab-panel--notes scroller" id="tab-notes">
             <div class="notes-head"><p class="eyebrow">Your notes on this paper</p><em id="notes-state"></em></div>
             <textarea class="textarea" id="notes-text" placeholder="Anything you want to remember next time you open this paper: what it's for, what to re-read, what you didn't follow…"></textarea>
+          </div>
+          </div>
+          <div class="row row--mark" id="mark-row" hidden>
+            <button class="btn btn--good" id="mark-right">Got it <kbd>Y</kbd></button>
+            <button class="btn btn--bad" id="mark-wrong">Missed it <kbd>N</kbd></button>
           </div>
         </aside>
       </section>
 
       <!-- Library -->
-      <section class="view" id="view-library">
-        <header class="masthead masthead--row">
-          <div>
-            <h1>Library</h1>
-            <p class="lede" id="library-lede">Everything you've added.</p>
-          </div>
-          <div class="toolbar">
-            <span class="search"><svg><use href="#i-search"/></svg><input class="input" id="library-search" placeholder="Search titles" /></span>
-            <span class="segmented" id="library-filter">
-              <button class="is-active" data-filter="all">All</button>
-              <button data-filter="unread">Unread</button>
-              <button data-filter="review">To review</button>
-            </span>
-          </div>
+      <!-- Library: every paper as a loose index card on the cover. -->
+      <section class="view view--cover" id="view-library">
+        <header class="cover-bar">
+          <div class="cover-label"><h1>Library</h1><span id="library-lede">Everything you've added.</span></div>
+          <span class="spacer"></span>
+          <span class="segmented segmented--leather" id="library-filter">
+            <button class="is-active" data-filter="all">All</button>
+            <button data-filter="unread">Unread</button>
+            <button data-filter="review">To review</button>
+          </span>
+          <span class="search search--leather"><svg><use href="#i-search"/></svg><input class="input" id="library-search" placeholder="Search titles" aria-label="Search titles" /></span>
         </header>
         <div id="library-list"></div>
         <div id="library-queue"></div>
       </section>
 
-      <!-- Inbox -->
-      <section class="view" id="view-inbox">
-        <header class="masthead">
-          <h1>Inbox</h1>
-          <p class="lede">Papers waiting for their questions to be written.</p>
+      <!-- Inbox: the add form on a sheet; what's waiting as a pile of cards. -->
+      <section class="view view--cover" id="view-inbox">
+        <header class="cover-bar">
+          <div class="cover-label"><h1>Inbox</h1><span>papers waiting for their questions</span></div>
+          <span class="spacer"></span>
+          <button class="btn btn--leather" id="run-inbox">Process all now</button>
         </header>
 
-        <div class="card">
-          <h3 class="card-title">Add a paper</h3>
-          <label class="field" style="margin-top:14px">
-            <span class="field-label">From the web</span>
-            <span class="url-row">
-              <input class="input" type="url" id="url-input" placeholder="Paste a link: bioRxiv, arXiv, a blog post…" />
-              <button class="btn btn--primary" id="add-url">Add</button>
-            </span>
-            <span class="field-help" id="url-note">Web text reads better than a PDF: real sections, no column or hyphen damage. For bioRxiv and arXiv the PDF is fetched too, to read alongside.</span>
-          </label>
-
-          <div class="panel panel--note preview" id="preview" hidden>
-            <p class="eyebrow">Check this looks right before adding</p>
-            <h3 id="preview-title"></h3>
-            <p class="meta" id="preview-meta"></p>
-            <div class="preview-text" id="preview-text"></div>
-            <div class="row">
-              <button class="btn btn--primary" id="preview-add">Add it</button>
-              <button class="btn" id="preview-paste">Paste the text instead</button>
-              <button class="btn btn--ghost" id="preview-cancel">Cancel</button>
-            </div>
-          </div>
-
-          <div class="panel panel--note" id="paste-box" hidden>
+        <div class="inbox-columns">
+          <section class="sheet add-sheet">
+            <h2>Add a paper</h2>
+            <p class="lede">It gets its questions overnight, or when you ask.</p>
             <label class="field">
-              <span class="field-label">Title</span>
-              <input class="input" type="text" id="paste-title" placeholder="What is this article called?" />
+              <span class="field-label">From the web</span>
+              <span class="url-row">
+                <input class="input" type="url" id="url-input" placeholder="Paste a link: bioRxiv, arXiv, a blog post…" />
+                <button class="btn btn--primary" id="add-url">Add</button>
+              </span>
+              <span class="field-help" id="url-note">Web text reads better than a PDF: real sections, no column or hyphen damage. For bioRxiv and arXiv the PDF is fetched too, to read alongside.</span>
             </label>
-            <label class="field">
-              <span class="field-label">The article's text</span>
-              <textarea class="textarea" id="paste-text" rows="8" placeholder="Select the article in your browser, copy, and paste it here…"></textarea>
-            </label>
-            <div class="row">
-              <button class="btn btn--primary" id="paste-add">Add it</button>
-              <button class="btn btn--ghost" id="paste-cancel">Cancel</button>
-            </div>
-          </div>
-          <div class="activity" id="url-activity" hidden>
-            <span class="spinner" aria-hidden="true"></span>
-            <div class="activity-text">
-              <p class="activity-main" id="url-main"></p>
-              <p class="activity-sub" id="url-sub"></p>
-            </div>
-            <div class="activity-bar" id="url-bar" hidden><i></i></div>
-          </div>
 
-          <div class="drop-hint">
-            <svg><use href="#i-upload"/></svg>
-            <p>Or drop PDFs anywhere on this window.</p>
-            <button class="btn" id="add-papers">Choose PDFs…</button>
-          </div>
-        </div>
-
-        <div class="section-head">
-          <h2>Waiting</h2>
-          <p class="hint" id="run-note">Processed every night at 02:00 · about 13 minutes a paper</p>
-        </div>
-        <div class="list" id="inbox-list"></div>
-        <div class="row">
-          <button class="btn btn--primary" id="run-inbox">Process all now</button>
-        </div>
-        <div class="activity" id="run-activity" hidden>
-          <span class="spinner" aria-hidden="true"></span>
-          <div class="activity-text">
-            <p class="activity-main" id="run-main"></p>
-            <p class="activity-sub" id="run-sub"></p>
-          </div>
-          <div class="activity-bar" id="run-bar" hidden><i></i></div>
-        </div>
-      </section>
-
-      <!-- Progress -->
-      <section class="view" id="view-progress">
-        <header class="masthead">
-          <h1>Progress</h1>
-          <p class="lede">Since you started.</p>
-        </header>
-        <div class="figures" id="figures"></div>
-        <div class="progress-columns">
-          <div class="card" id="grid-card">
-            <h3 class="card-title">Reading, day by day</h3>
-            <div class="heatmap-scroll">
-              <div class="heatmap-months" id="heatmap-months"></div>
-              <div class="heatmap-body">
-                <div class="heatmap-weekdays"><span>Mon</span><span>Wed</span><span>Fri</span></div>
-                <div class="heatmap" id="heatmap"></div>
+            <div class="panel panel--note preview" id="preview" hidden>
+              <p class="eyebrow">Check this looks right before adding</p>
+              <h3 id="preview-title"></h3>
+              <p class="meta" id="preview-meta"></p>
+              <div class="preview-text" id="preview-text"></div>
+              <div class="row">
+                <button class="btn btn--primary" id="preview-add">Add it</button>
+                <button class="btn" id="preview-paste">Paste the text instead</button>
+                <button class="btn btn--ghost" id="preview-cancel">Cancel</button>
               </div>
             </div>
-            <div class="heatmap-key">
-              <span>Less</span>
-              <span class="cell level-0"></span><span class="cell level-1"></span>
-              <span class="cell level-2"></span><span class="cell level-3"></span><span class="cell level-4"></span>
-              <span>More</span>
-            </div>
-          </div>
 
-          <div class="card" id="day-card">
-            <h3 class="card-title">Recent days</h3>
-            <ul class="days" id="days"></ul>
-            <div class="days-key">
-              <span><i style="background:var(--good)"></i>Right</span>
-              <span><i style="background:var(--rule-strong)"></i>Answered</span>
+            <div class="panel panel--note" id="paste-box" hidden>
+              <label class="field">
+                <span class="field-label">Title</span>
+                <input class="input" type="text" id="paste-title" placeholder="What is this article called?" />
+              </label>
+              <label class="field">
+                <span class="field-label">The article's text</span>
+                <textarea class="textarea" id="paste-text" rows="8" placeholder="Select the article in your browser, copy, and paste it here…"></textarea>
+              </label>
+              <div class="row">
+                <button class="btn btn--primary" id="paste-add">Add it</button>
+                <button class="btn btn--ghost" id="paste-cancel">Cancel</button>
+              </div>
             </div>
-          </div>
-        </div>
+            <div class="activity" id="url-activity" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <div class="activity-text">
+                <p class="activity-main" id="url-main"></p>
+                <p class="activity-sub" id="url-sub"></p>
+              </div>
+              <div class="activity-bar" id="url-bar" hidden><i></i></div>
+            </div>
 
-        <div class="card" id="sticking-card">
-          <h3 class="card-title">What you keep missing</h3>
-          <ul class="sticking" id="sticking"></ul>
-          <div class="row">
-            <button class="btn" id="review-from-progress">Work through the review pile</button>
-          </div>
+            <div class="drop-hint">
+              <svg><use href="#i-upload"/></svg>
+              <p>Or drop PDFs anywhere on this window.</p>
+              <button class="btn" id="add-papers">Choose PDFs…</button>
+            </div>
+          </section>
+
+          <section class="pile">
+            <div class="slip"><b>Waiting</b><span class="hint" id="run-note">Processed every night at 02:00 · about 13 minutes a paper</span></div>
+            <div class="pile-cards" id="inbox-list"></div>
+            <div class="activity" id="run-activity" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <div class="activity-text">
+                <p class="activity-main" id="run-main"></p>
+                <p class="activity-sub" id="run-sub"></p>
+              </div>
+              <div class="activity-bar" id="run-bar" hidden><i></i></div>
+            </div>
+          </section>
         </div>
       </section>
 
-      <!-- Settings -->
-      <section class="view" id="view-settings">
-        <header class="masthead">
-          <h1>Settings</h1>
-          <p class="lede">How papers get turned into questions.</p>
+      <!-- Progress: a sheet of graph paper, the charts on index cards. -->
+      <section class="view view--cover" id="view-progress">
+        <header class="cover-bar">
+          <div class="cover-label"><h1>Progress</h1><span>since you started</span></div>
         </header>
-
-        <div class="card">
-          <h3 class="card-title">Setup</h3>
-          <ul class="checks" id="checks"></ul>
-          <div class="row" id="ollama-row" hidden>
-            <button class="btn" id="start-ollama">Start Ollama</button>
-            <span class="hint">Nothing is answering on localhost:11434.</span>
-          </div>
-          <div class="row" id="memory-row" hidden>
-            <button class="btn" id="fix-memory">Apply speed settings</button>
-            <button class="btn" id="clear-memory" hidden>Turn off speed settings</button>
-            <span class="hint" id="memory-note"></span>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3 class="card-title">Questions</h3>
-          <div class="form-row">
-            <div>
-              <span class="field-label">Model</span>
-              <span class="field-help">Bigger models write better questions and check their answers more reliably.</span>
-            </div>
-            <div>
-              <span class="model-picker">
-                <select class="select" id="model-select"></select>
-                <button class="btn" id="model-download" hidden>Download</button>
-              </span>
-              <p class="model-detail" id="model-detail"></p>
-              <div class="activity" id="pull-activity" hidden>
-                <span class="spinner" aria-hidden="true"></span>
-                <div class="activity-text">
-                  <p class="activity-main" id="pull-main"></p>
-                  <p class="activity-sub" id="pull-sub"></p>
+        <div class="sheet sheet--graph">
+          <div class="figures" id="figures"></div>
+          <div class="progress-columns">
+            <div class="progress-charts">
+              <div class="index-card" id="grid-card">
+                <p class="eyebrow">Reading, day by day</p>
+                <div class="heatmap-scroll">
+                  <div class="heatmap-months" id="heatmap-months"></div>
+                  <div class="heatmap-body">
+                    <div class="heatmap-weekdays"><span>Mon</span><span>Wed</span><span>Fri</span></div>
+                    <div class="heatmap" id="heatmap"></div>
+                  </div>
                 </div>
-                <div class="activity-bar" id="pull-bar" hidden><i></i></div>
+                <div class="heatmap-key">
+                  <span>Less</span>
+                  <span class="cell level-0"></span><span class="cell level-1"></span>
+                  <span class="cell level-2"></span><span class="cell level-3"></span><span class="cell level-4"></span>
+                  <span>More</span>
+                </div>
+              </div>
+              <div class="index-card" id="day-card">
+                <p class="eyebrow">Recent days</p>
+                <ul class="days" id="days"></ul>
+                <div class="days-key">
+                  <span><i style="background:var(--good)"></i>Right</span>
+                  <span><i style="background:var(--rule-strong)"></i>Answered</span>
+                </div>
+              </div>
+            </div>
+            <div class="index-card index-card--stack" id="sticking-card">
+              <p class="eyebrow">What you keep missing</p>
+              <ul class="sticking" id="sticking"></ul>
+              <div class="row">
+                <button class="btn" id="review-from-progress">Work through the review pile</button>
               </div>
             </div>
           </div>
-          <div class="form-row">
-            <label class="field-label" for="num-questions">Questions per paper</label>
-            <div><input class="input input--num" type="number" id="num-questions" min="1" max="50" /></div>
-          </div>
-          <div class="form-row">
-            <div>
-              <label class="field-label" for="guidance">Tailor the questions</label>
-              <span class="field-help">Optional. Added to the prompt for every paper.</span>
-            </div>
-            <textarea class="textarea" id="guidance" rows="3" placeholder="e.g. I'm a wet-lab biologist: favour experimental design and controls over the maths."></textarea>
-          </div>
-          <div class="row">
-            <button class="btn btn--primary" id="save-settings">Save</button>
-            <span class="hint" id="settings-note"></span>
-          </div>
         </div>
+      </section>
 
-        <div class="card">
-          <h3 class="card-title">Appearance</h3>
-          <div class="form-row">
-            <span class="field-label">Theme</span>
-            <div>
-              <span class="segmented" id="theme-choice">
-                <button data-theme-choice="system">Match the system</button>
-                <button data-theme-choice="light">Light</button>
-                <button data-theme-choice="dark">Dark</button>
-              </span>
+      <!-- Settings: one sheet, like a letter, with the machine's state beside it. -->
+      <section class="view view--cover" id="view-settings">
+        <header class="cover-bar">
+          <div class="cover-label"><h1>Settings</h1><span>how papers become questions</span></div>
+        </header>
+
+        <div class="settings-columns">
+          <div class="sheet sheet--letter">
+            <h2>Questions</h2>
+            <div class="form-row">
+              <div>
+                <span class="field-label">Model</span>
+                <span class="field-help">Bigger models write better questions and check their answers more reliably.</span>
+              </div>
+              <div>
+                <span class="model-picker">
+                  <select class="select" id="model-select"></select>
+                  <button class="btn" id="model-download" hidden>Download</button>
+                </span>
+                <p class="model-detail" id="model-detail"></p>
+                <div class="activity" id="pull-activity" hidden>
+                  <span class="spinner" aria-hidden="true"></span>
+                  <div class="activity-text">
+                    <p class="activity-main" id="pull-main"></p>
+                    <p class="activity-sub" id="pull-sub"></p>
+                  </div>
+                  <div class="activity-bar" id="pull-bar" hidden><i></i></div>
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="num-questions">Questions per paper</label>
+              <div><input class="input input--num" type="number" id="num-questions" min="1" max="50" /></div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label class="field-label" for="guidance">Tailor the questions</label>
+                <span class="field-help">Optional. Added to the prompt for every paper.</span>
+              </div>
+              <textarea class="textarea" id="guidance" rows="3" placeholder="e.g. I'm a wet-lab biologist: favour experimental design and controls over the maths."></textarea>
+            </div>
+            <div class="row">
+              <button class="btn btn--primary" id="save-settings">Save</button>
+              <span class="hint" id="settings-note"></span>
+            </div>
+
+            <h2>Appearance</h2>
+            <div class="form-row">
+              <span class="field-label">Theme</span>
+              <div>
+                <span class="segmented" id="theme-choice">
+                  <button data-theme-choice="system">Match the system</button>
+                  <button data-theme-choice="light">Light</button>
+                  <button data-theme-choice="dark">Dark</button>
+                </span>
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <span class="field-label">Desk wood</span>
+                <span class="field-help">The rail beside the cover.</span>
+              </div>
+              <div>
+                <div class="wood-choice" id="wood-choice" role="radiogroup" aria-label="Desk wood"></div>
+                <p class="model-detail" id="wood-name"></p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="card" id="schedule-card">
-          <h3 class="card-title">Nightly run</h3>
-          <p class="meta" id="schedule-state"></p>
-          <div class="row">
-            <button class="btn" id="schedule-add">Run every night at 02:00</button>
-            <button class="btn" id="schedule-remove" hidden>Stop running nightly</button>
+          <div class="settings-side">
+            <div class="index-card">
+              <p class="eyebrow">Setup</p>
+              <ul class="checks" id="checks"></ul>
+              <div class="row" id="ollama-row" hidden>
+                <button class="btn" id="start-ollama">Start Ollama</button>
+                <span class="hint">Nothing is answering on localhost:11434.</span>
+              </div>
+              <div class="row" id="memory-row" hidden>
+                <button class="btn" id="fix-memory">Apply speed settings</button>
+                <button class="btn" id="clear-memory" hidden>Turn off speed settings</button>
+                <span class="hint" id="memory-note"></span>
+              </div>
+            </div>
+
+            <div class="index-card" id="schedule-card">
+              <p class="eyebrow">Nightly run</p>
+              <p class="meta" id="schedule-state"></p>
+              <div class="row">
+                <button class="btn" id="schedule-add">Run every night at 02:00</button>
+                <button class="btn" id="schedule-remove" hidden>Stop running nightly</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
