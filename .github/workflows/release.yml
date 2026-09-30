@@ -109,10 +109,22 @@ jobs:
         with:
           subject-path: release/*.exe
 
+      # The installed app updates itself from these: latest.yml names the
+      # newest version, and the .blockmap lets it download only what changed.
+      - name: Check the update files were built
+        shell: pwsh
+        run: |
+          foreach ($f in @("release\latest.yml")) { if (-not (Test-Path $f)) { throw "missing $f" } }
+          if (-not (Get-ChildItem release\*.exe.blockmap)) { throw "missing the installer's .blockmap" }
+          Get-Content release\latest.yml
+
       - uses: actions/upload-artifact@v4
         with:
           name: DoTheReading-installer
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/latest.yml
 
       # The annotated tag's message is the release notes: written per release,
       # not boilerplate. Falls back to the commit subjects since the last tag.
@@ -142,6 +154,8 @@ jobs:
         with:
           files: |
             release/*.exe
+            release/*.exe.blockmap
+            release/latest.yml
             release/SHA256SUMS.txt
           body: |
             ## What's new
@@ -151,6 +165,8 @@ jobs:
             ---
 
             **DoTheReading** — download `DoTheReading-Setup-*.exe` below.
+            Already installed (0.6.1 or later)? The app updates itself: it
+            downloads a new version in the background and offers a restart.
 
             The installer contains the app and the whole Python pipeline, so
             no Python install is needed. On first run the app's Settings tab

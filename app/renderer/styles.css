@@ -375,6 +375,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .pip--warn { background: var(--warn); color: var(--surface); }
 
+/* A downloaded update, on a card at the foot of the rail. */
+.update {
+  margin: 0 18px 10px 16px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--ink-2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+.update b { color: var(--ink); font-weight: 600; }
+.update .btn { margin-top: 10px; width: 100%; }
+.app-version { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--page-rule); font-size: 12px; }
+
 /* Days in a row, on a card at the foot of the rail. */
 .streak {
   margin: 0 18px 12px 16px;
@@ -415,7 +427,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .rail-btn { padding: 0 34px 0 14px; position: relative; }
   .rail-btn span { display: none; }
   .rail-btn .pip { position: absolute; top: 2px; left: 26px; min-width: 16px; padding: 0 4px; font-size: 10px; }
-  .streak, .refresh span { display: none; }
+  .streak, .update, .refresh span { display: none; }
 }
 
 /* ---- the cover ------------------------------------------------------------ */
@@ -504,7 +516,7 @@ main::after { /* stitching */
 
 /* An index card, as the questions are: a red rule under its heading, and
    (--stack) more cards behind it. The streak and the empty notes are cards too. */
-.index-card, .streak, .empty-state, .list-empty {
+.index-card, .streak, .update, .empty-state, .list-empty {
   position: relative;
   background: var(--card-paper);
   border: 1px solid var(--card-line);

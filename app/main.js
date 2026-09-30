@@ -291,8 +291,40 @@ ipcMain.handle("choose-papers", async (event) => {
 
 ipcMain.handle("open-external", (_event, target) => shell.openPath(target));
 
+// ---- updates --------------------------------------------------------------
+
+// Installed builds keep themselves up to date from the GitHub releases:
+// a new version downloads in the background (only the parts of the installer
+// that changed), then the app offers a restart, or installs it on quit.
+// Never from a checkout, and never in the self-test or screenshot runs.
+const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
+let updater = null;
+let updateReady = null; // the downloaded version, once there is one
+
+function startUpdates(win) {
+  if (!app.isPackaged || process.env.DTR_SELFTEST || process.env.DTR_SHOT) return;
+  ({ autoUpdater: updater } = require("electron-updater"));
+  updater.autoDownload = true;
+  updater.autoInstallOnAppQuit = true;
+  updater.on("update-downloaded", (info) => {
+    updateReady = info.version;
+    if (!win.isDestroyed()) win.webContents.send("update-ready", info.version);
+  });
+  // Offline, or GitHub unreachable: try again next time, quietly.
+  updater.on("error", (err) => console.warn("update check failed:", err.message));
+  const check = () => updater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, UPDATE_EVERY_MS);
+}
+
+ipcMain.handle("app-version", () => ({ version: app.getVersion(), updateReady }));
+ipcMain.handle("install-update", () => {
+  // Silent, then reopen: the same install folder, no wizard.
+  if (updater && updateReady) updater.quitAndInstall(true, true);
+});
+
 app.whenReady().then(() => {
-  createWindow();
+  startUpdates(createWindow());
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

@@ -30,6 +30,12 @@ what's missing and offers to fix it:
   removes it).
 - **Tesseract** — optional, only for scanned PDFs.
 
+**It keeps itself up to date.** From 0.6.1 on, the installed app checks
+the releases here every few hours, downloads a new version in the
+background (only the parts of the installer that changed), and offers
+*Restart to update* at the foot of the sidebar; otherwise it installs the
+next time you close the app. A restart asked for mid-run waits for the run.
+
 **Windows will warn you.** The installer isn't code-signed, so SmartScreen
 says "Windows protected your PC": choose *More info → Run anyway*. Every
 release carries a build attestation and checksums if you'd rather verify

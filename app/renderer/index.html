@@ -44,6 +44,10 @@
         <button class="rail-btn" data-view="progress"><svg><use href="#i-progress"/></svg><span>Progress</span></button>
         <button class="rail-btn" data-view="settings"><svg><use href="#i-settings"/></svg><span>Settings</span><em class="pip pip--warn" id="settings-pip" hidden>!</em></button>
       </div>
+      <div class="update" id="update" hidden>
+        <p><b>Version <span id="update-version"></span></b> is ready.</p>
+        <button class="btn btn--sm btn--primary" id="install-update">Restart to update</button>
+      </div>
       <div class="streak" id="streak" hidden>
         <p><b id="streak-count"></b> <span id="streak-label"></span></p>
         <div class="streak-week" id="streak-week"></div>
@@ -428,6 +432,7 @@
             <div class="index-card">
               <p class="eyebrow">Setup</p>
               <ul class="checks" id="checks"></ul>
+              <p class="hint app-version" id="app-version"></p>
               <div class="row" id="ollama-row" hidden>
                 <button class="btn" id="start-ollama">Start Ollama</button>
                 <span class="hint">Nothing is answering on localhost:11434.</span>

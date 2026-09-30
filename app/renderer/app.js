@@ -7,6 +7,8 @@ const state = {
   session: null,     // { items: [{paper, title, question}], index, results: [] }
   revealed: false,
   libraryFilter: "all",
+  jobs: [],          // runs waiting their turn: { key, run }
+  jobRunning: null,  // the run going now
 };
 
 // Theme: "system" follows the OS; light/dark pin it. A per-machine
@@ -348,7 +350,11 @@ function queueRow(paper) {
         <div class="tags"><span class="tag">${paper.kind === "pdf" ? "PDF" : "Web article"}</span><span class="tag">${size} MB</span></div>
       </div>
       <div class="actions">
-        <button class="btn btn--sm" data-process="${escapeHtml(paper.name)}" title="Write questions for this one now">Write questions</button>
+        ${{
+          running: `<span class="tag tag--notes">Writing…</span>`,
+          "in-run": `<span class="tag tag--notes">In this run</span>`,
+          queued: `<span class="tag">Queued</span>`,
+        }[jobState(paper.name)] || `<button class="btn btn--sm" data-process="${escapeHtml(paper.name)}" title="Write questions for this one now">Write questions</button>`}
         <button class="btn btn--sm" data-shelve="${escapeHtml(paper.name)}" title="Keep it to read, without questions">Just read it</button>
         <button class="btn btn--sm btn--ghost btn--icon btn--remove" data-remove="${escapeHtml(paper.name)}" title="Remove from the queue">${icon("x")}</button>
       </div>
@@ -571,25 +577,28 @@ async function addPastedText() {
   refresh();
 }
 
-async function writeQuestionsNow() {
+function writeQuestionsNow() {
   const paper = state.session?.items[0]?.paper;
   if (!paper) return;
   const count = Number($("new-count").value) || 12;
+  enqueue(`write:${paper}`, () => writeQuestionsFor(paper, count));
+}
+
+async function writeQuestionsFor(paper, count) {
   state.runProgress = { papers: 0, done: 0 };
   state.runActivity = activity("write");
   state.runActivity.start("Reading the paper…");
-  $("write-questions").disabled = true;
   try {
     const result = await window.study.writeQuestions({ paper, count });
     if (!result.ok) throw new Error(result.error || "couldn't write questions");
     state.runActivity.finish(`${plural(count, "question")} written`, "Reopen the paper to start.");
     await refresh();
-    startPaper(paper);
+    // Open it only if you're still on it: the run may have waited in the queue.
+    if (state.session?.items[0]?.paper === paper) startPaper(paper);
   } catch (err) {
     state.runActivity.finish("Couldn't write questions", err.message);
   }
   state.runActivity = null;
-  $("write-questions").disabled = false;
 }
 
 async function toggleRead() {
@@ -720,7 +729,59 @@ async function offerClipboardUrl() {
   }
 }
 
-async function runInbox(only) {
+// ---- one run at a time ----------------------------------------------------
+
+// Writing questions keeps the model busy for minutes, and Ollama answers one
+// request at a time: two runs side by side each go at half speed. So runs
+// queue: one asked for while another is going waits its turn.
+
+function enqueue(key, run) {
+  if (state.jobRunning?.key === key || state.jobs.some((job) => job.key === key)) {
+    return toast("That's already queued");
+  }
+  state.jobs.push({ key, run });
+  if (state.jobRunning) toast("Queued — it starts when the current run finishes");
+  renderWaiting();
+  drainQueue();
+}
+
+async function drainQueue() {
+  if (state.jobRunning) return;
+  while (state.jobs.length) {
+    state.jobRunning = state.jobs.shift();
+    renderWaiting();
+    try {
+      await state.jobRunning.run();
+    } catch (err) {
+      toast(err.message, 8000);
+    }
+    state.jobRunning = null;
+  }
+  renderWaiting();
+}
+
+// The waiting papers appear in the Inbox and at the foot of the Library.
+function renderWaiting() {
+  if (!state.data) return;
+  renderInbox();
+  renderQueue();
+}
+
+// Where a waiting paper stands: being written, part of a run of them all,
+// waiting its turn, or none of those.
+function jobState(name) {
+  const running = state.jobRunning?.key;
+  if (running === `paper:${name}`) return "running";
+  if (running === "all") return "in-run";
+  if (state.jobs.some((job) => job.key === `paper:${name}` || job.key === "all")) return "queued";
+  return null;
+}
+
+function runInbox(only) {
+  enqueue(only && only.length ? `paper:${only[0]}` : "all", () => processInbox(only));
+}
+
+async function processInbox(only) {
   // Check the model is there before starting: a run that can't work takes
   // minutes to say so otherwise.
   try {
@@ -743,7 +804,6 @@ async function runInbox(only) {
   state.runProgress = { papers: 0, done: 0 };
   state.runActivity = activity("run");
   state.runActivity.start("Starting…");
-  $("run-inbox").disabled = true;
   try {
     const result = await window.study.processInbox(only);
     if (result && result.ok === false) throw new Error(result.error || "the run stopped early");
@@ -753,7 +813,6 @@ async function runInbox(only) {
     state.runActivity.finish("Couldn't finish the run", err.message);
   }
   state.runActivity = null;
-  $("run-inbox").disabled = false;
   await refresh();
 }
 
@@ -1380,6 +1439,25 @@ async function changeMemorySettings(action) {
 
 $("fix-memory").addEventListener("click", () => changeMemorySettings("set"));
 $("clear-memory").addEventListener("click", () => changeMemorySettings("clear"));
+
+// ---- updates ----------------------------------------------------------------
+
+// The installed app fetches new versions itself; once one is downloaded, the
+// rail offers a restart. It joins the run queue, so it never cuts a run short.
+function showUpdateReady(version) {
+  $("update-version").textContent = version;
+  $("update").hidden = false;
+}
+
+window.study.onUpdateReady(showUpdateReady);
+window.study.appVersion().then(({ version, updateReady }) => {
+  $("app-version").textContent = `DoTheReading ${version} · updates itself from GitHub`;
+  if (updateReady) showUpdateReady(updateReady);
+});
+$("install-update").addEventListener("click", () => {
+  if (state.jobRunning) toast("It'll restart when the current run finishes");
+  enqueue("update", () => window.study.installUpdate());
+});
 
 $("wood-choice").innerHTML = WOODS.map(([id, name]) =>
   `<button role="radio" data-wood="${id}" title="${name}" aria-label="${name}" style="background-image:url('${woodUrl(id, true)}')"></button>`).join("");

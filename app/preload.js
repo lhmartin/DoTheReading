@@ -33,4 +33,7 @@ contextBridge.exposeInMainWorld("study", {
   onPullLog: (callback) => ipcRenderer.on("pull-log", (_event, line) => callback(line)),
   openExternal: (target) => ipcRenderer.invoke("open-external", target),
   onProcessLog: (callback) => ipcRenderer.on("process-log", (_event, line) => callback(line)),
+  appVersion: () => ipcRenderer.invoke("app-version"),
+  onUpdateReady: (callback) => ipcRenderer.on("update-ready", (_event, version) => callback(version)),
+  installUpdate: () => ipcRenderer.invoke("install-update"),
 });
