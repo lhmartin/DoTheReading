@@ -458,15 +458,19 @@ function describeRunLine(line, progress) {
     progress.done = 0;
     return { main: `Processing ${plural(progress.papers, "paper")}…`, sub: "" };
   }
-  if ((match = text.match(/^Processing (.+)\.pdf/))) {
+  // A paper's first minutes: its text is read (seconds), the model names it,
+  // then reads the paper as a whole before the sections.
+  if ((match = text.match(/^Processing (.+?)\.(pdf|html?)\.\.\.$/))) {
     progress.paper = match[1];
     progress.dropped = 0;
     return { main: `Reading ${match[1]}`, sub: "extracting the text", fraction: 0 };
   }
+  if (text.startsWith("text read")) return { sub: "finding the title" };
   if ((match = text.match(/^title: (.+)$/))) {
     progress.paper = match[1];
     return { main: `Reading ${match[1]}` };
   }
+  if (text.startsWith("reading the paper as a whole")) return { sub: "reading the paper as a whole", fraction: 0.03 };
   if ((match = text.match(/^section (\d+)\/(\d+)/))) {
     const [, current, total] = match.map(Number);
     // Generation is most of the work; leave room for the checking that follows.

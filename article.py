@@ -21,6 +21,8 @@ HEADING_TAGS = {"h1", "h2", "h3", "h4"}
 # Sections that follow the paper itself; keeping them buries the content.
 TAIL_HEADINGS = re.compile(r"^(references|bibliography|acknowledge?ments|supplementary|footnotes|"
                            r"competing interests|author contributions|data availability)\b", re.I)
+# ...except that arXiv puts the appendices (often the methods) after them.
+APPENDIX_HEADING = re.compile(r"\bappendi(x|ces)\b", re.I)
 
 
 class ArticleParser(HTMLParser):
@@ -52,7 +54,9 @@ class ArticleParser(HTMLParser):
             self._heading = tag
             self.parts.append("\n\n## ")
         elif tag in BLOCK_TAGS and not self._skip_depth:
-            self.parts.append("\n\n")
+            # A line break inside a heading (arXiv sets long titles over two
+            # lines) is a space: the heading goes on.
+            self.parts.append(" " if self._heading else "\n\n")
 
     def handle_endtag(self, tag):
         if tag in SKIP_TAGS:
@@ -78,13 +82,19 @@ class ArticleParser(HTMLParser):
 
 
 def drop_tail_sections(text: str) -> str:
-    """Cut references and similar trailing sections."""
-    kept = []
+    """Cut references and similar trailing sections, picking up again at an
+    appendix if one follows them."""
+    kept, skipping = [], False
     for block in text.split("\n\n"):
         heading = block.strip()
-        if heading.startswith("## ") and TAIL_HEADINGS.match(heading[3:].strip()):
-            break
-        kept.append(block)
+        if heading.startswith("## "):
+            name = heading[3:].strip()
+            if TAIL_HEADINGS.match(name):
+                skipping = True
+            elif skipping and APPENDIX_HEADING.search(name):
+                skipping = False
+        if not skipping:
+            kept.append(block)
     return "\n\n".join(kept)
 
 
@@ -122,6 +132,8 @@ def canonical_sources(url: str) -> dict:
     """Where to find the full text and (if there is one) the PDF.
 
     bioRxiv/medRxiv and arXiv publish both; anything else is read as-is.
+    arXiv's abstract page (/abs/) has only the abstract; the full text is at
+    /html/, for every paper arXiv could convert (most since late 2023).
     """
     parsed = urlparse(url)
     host = parsed.netloc.lower().removeprefix("www.")
@@ -133,7 +145,7 @@ def canonical_sources(url: str) -> dict:
 
     if host == "arxiv.org":
         paper_id = re.sub(r"^/(abs|pdf|html)/", "", path).removesuffix(".pdf")
-        return {"text_url": f"https://arxiv.org/abs/{paper_id}",
+        return {"text_url": f"https://arxiv.org/html/{paper_id}",
                 "pdf_url": f"https://arxiv.org/pdf/{paper_id}"}
 
     return {"text_url": url, "pdf_url": None}

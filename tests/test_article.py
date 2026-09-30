@@ -52,10 +52,11 @@ def test_biorxiv_gives_full_text_and_pdf():
     "https://arxiv.org/abs/2511.09216",
     "https://arxiv.org/pdf/2511.09216",
     "https://arxiv.org/pdf/2511.09216.pdf",
+    "https://arxiv.org/html/2511.09216",
 ])
 def test_arxiv_urls_all_resolve_to_the_same_paper(url):
     sources = canonical_sources(url)
-    assert sources["text_url"] == "https://arxiv.org/abs/2511.09216"
+    assert sources["text_url"] == "https://arxiv.org/html/2511.09216", "the full text, not the abstract page"
     assert sources["pdf_url"] == "https://arxiv.org/pdf/2511.09216"
 
 
@@ -121,3 +122,25 @@ def test_title_drops_the_arxiv_id_from_the_page_title():
     from article import title_from
 
     assert title_from({"title": "[2609.19770v1] TorchCraft", "text": "body"}, "u") == "TorchCraft"
+
+
+def test_a_line_break_inside_a_heading_doesnt_split_it():
+    page = ('<html><body><h1 class="ltx_title">TR2-D2: Tree Search Guided Trajectory-Aware <br>'
+            'Fine-Tuning for Discrete Diffusion</h1><p>' + "Body text. " * 20 + '</p></body></html>')
+    got = extract_article(page)
+    assert got["text"].startswith("## TR2-D2: Tree Search Guided Trajectory-Aware Fine-Tuning for Discrete Diffusion")
+
+
+def test_appendices_after_the_references_are_kept():
+    body = "Some sentence long enough to count as text in this test. "
+    page = (f"<h2>1 Introduction</h2><p>{body}</p><h2>References</h2><p>[1] A cited paper, long enough to keep.</p>"
+            f"<h2>Appendix A Methods</h2><p>{body}</p><h3>A.1 Design protocol</h3><p>{body}</p>")
+    text = extract_article(page)["text"]
+    assert "## Appendix A Methods" in text and "## A.1 Design protocol" in text
+    assert "References" not in text and "A cited paper" not in text
+
+
+def test_a_journal_page_still_ends_at_its_references():
+    body = "Some sentence long enough to count as text in this test. "
+    page = f"<h2>Results</h2><p>{body}</p><h2>References</h2><p>[1] A cited paper, long enough to keep.</p>"
+    assert "A cited paper" not in extract_article(page)["text"]

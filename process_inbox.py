@@ -65,6 +65,7 @@ def write_questions_for(source: Path, config: dict, log=print) -> str | None:
     text = extract_any(str(source), log=log)
     if not text.strip():
         return f"no extractable text in {source.name}, even after OCR"
+    log(f"    text read ({len(text):,} characters)")
 
     title = (text.split("\n\n")[0].removeprefix("## ").strip() if source.suffix.lower() != ".pdf"
              else find_title(str(source), text, config["model"], log=log)) or source.stem

@@ -471,14 +471,17 @@ def add_url(base: Path, url: str, log=lambda m: None, html: str | None = None,
             page_html = fetch_with_retry(sources["text_url"], log=log).text
         except requests.exceptions.RequestException as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            # A rate-limited site often still serves its PDF, which we can process.
+            # No web text (arXiv has no HTML version of some papers), or a
+            # rate-limited site: its PDF is often still there to process.
             if sources["pdf_url"] and not dry_run:
                 log("the site wouldn't serve its text — trying the PDF instead…")
                 slug = article.slug_for(url, None)
                 if save_pdf_to_inbox(base, sources["pdf_url"], slug, log=log):
-                    return {"ok": True, "title": slug, "slug": slug, "characters": 0, "pdf": True,
-                            "note": "That site is rate-limiting us, so the PDF was added instead. "
-                                    "Adding the link again later gets the cleaner web text."}
+                    note = ("That site is rate-limiting us, so the PDF was added instead. "
+                            "Adding the link again later gets the cleaner web text."
+                            if status in RETRY_STATUSES else
+                            "There's no web version of this paper, so the PDF was added instead.")
+                    return {"ok": True, "title": slug, "slug": slug, "characters": 0, "pdf": True, "note": note}
             if status in RETRY_STATUSES:
                 return {"ok": False, "error": "That site is rate-limiting us. Wait a minute and try again."}
             return {"ok": False, "error": f"Couldn't fetch that page: {e}"}
