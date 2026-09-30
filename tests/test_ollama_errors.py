@@ -64,3 +64,27 @@ def test_load_timeout_is_not_reported_as_a_crash(monkeypatch):
     message = str(exit_info.value)
     assert "took too long to load" in message
     assert "crashed" not in message, "a slow load is not a crash"
+
+
+def test_a_looping_reply_is_retried_not_fatal(monkeypatch):
+    import paper_qa_lib
+    from tests.test_verification import FakeResponse
+
+    looped = FakeResponse(500, {"error": "prediction aborted, token repeat limit reached"})
+    replies = [looped, FakeResponse(200, {"response": '{"title": "Fine"}'})]
+    monkeypatch.setattr(paper_qa_lib.requests, "post", lambda *a, **k: replies.pop(0))
+    logged = []
+    assert paper_qa_lib.ask_json("p", "m", paper_qa_lib.TITLE_SCHEMA, log=logged.append) == {"title": "Fine"}
+    assert any("repeating itself" in line for line in logged)
+
+
+def test_a_section_that_keeps_looping_is_skipped(monkeypatch):
+    import paper_qa_lib
+
+    def always_loops(*args, **kwargs):
+        raise paper_qa_lib.ModelLooped("the model got stuck repeating itself")
+
+    monkeypatch.setattr(paper_qa_lib, "call_ollama", always_loops)
+    logged = []
+    assert paper_qa_lib.ask_skipping_failures("p", "m", "section 4 of 9", log=logged.append) == []
+    assert any("skipped section 4 of 9" in line for line in logged)

@@ -106,3 +106,12 @@ def test_pdf_text_without_headings_is_unaffected():
     paras = paragraphs(30)
     chunks = chunk_text("\n\n".join(paras), chunk_size=1000, overlap=0)
     assert "\n\n".join(chunks) == "\n\n".join(paras)
+
+
+def test_dot_leaders_are_stripped_but_ellipses_and_numbers_stay():
+    from paper_qa_lib import strip_dot_leaders
+
+    toc = "Appendix A Methods . . . . . . . . . . 14\nA.1.1 General framework ........ 15"
+    assert strip_dot_leaders(toc) == "Appendix A Methods 14\nA.1.1 General framework 15"
+    prose = "Wait... it rose from 0.5 to 1.2.3 in section A.1."
+    assert strip_dot_leaders(prose) == prose

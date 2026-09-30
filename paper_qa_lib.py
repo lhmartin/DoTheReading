@@ -150,8 +150,19 @@ def extract_any(path: str, ocr: bool = True, log=print) -> str:
         import article
 
         got = article.extract_article(Path(path).read_text(encoding="utf-8", errors="replace"))
-        return got["text"]
-    return extract_text(path, ocr=ocr, log=log)
+        return strip_dot_leaders(got["text"])
+    return strip_dot_leaders(extract_text(path, ocr=ocr, log=log))
+
+
+# Four or more dots, spaced or not: the leaders in a table of contents
+# ("A.1 Methods . . . . . . 14"). A model asked to quote such a line word for
+# word copies the dots until Ollama stops it for repeating itself, so they
+# go before the text reaches the model. An ellipsis ("...") is left alone.
+DOT_LEADER = re.compile(r"[ \t]*(?:\.[ \t]*){4,}")
+
+
+def strip_dot_leaders(text: str) -> str:
+    return DOT_LEADER.sub(" ", text)
 
 
 def extract_text(pdf_path: str, ocr: bool = True, log=print) -> str:
@@ -298,6 +309,10 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 
 # ---- Ollama -------------------------------------------------------------
 
+class ModelLooped(ValueError):
+    """Ollama stopped a reply that kept repeating the same token."""
+
+
 def call_ollama(prompt: str, model: str, fmt=None, max_tokens: int = MAX_REPLY_TOKENS) -> str:
     """Send a prompt to Ollama. `fmt` is passed as Ollama's `format` field
     (a JSON schema here) to constrain the output."""
@@ -327,6 +342,11 @@ def call_ollama(prompt: str, model: str, fmt=None, max_tokens: int = MAX_REPLY_T
             sys.exit("Ollama took too long to load the model (its 5 minute limit). That usually means it's "
                      "reading the model from a slow disk, or the machine is short of memory. Try again — "
                      "a second attempt is usually faster — or choose a smaller model in Settings.")
+        if "token repeat limit" in detail:
+            # The model got stuck writing the same thing over and over and
+            # Ollama cut it off. That's this reply, not the setup: callers
+            # retry it like a reply that doesn't parse.
+            raise ModelLooped("the model got stuck repeating itself")
         if "GGML_ASSERT" in detail or "process has terminated" in detail:
             sys.exit("Ollama's model server crashed while running the model. Try turning off the speed "
                      "settings in Settings and running again; if it keeps happening, re-download the "
@@ -359,13 +379,16 @@ def check_model(model: str) -> str | None:
 
 def _ask_with_retry(prompt: str, model: str, schema: dict, parse, log=print) -> tuple:
     """Call the model constrained to `schema` and parse the reply, retrying
-    once if it doesn't parse. Returns (parsed value, last raw reply); the
-    value is None if every attempt failed."""
+    once if it doesn't parse or the model got stuck repeating itself.
+    Returns (parsed value, last raw reply); the value is None if every
+    attempt failed."""
     raw = ""
     for attempt in range(1, MAX_JSON_ATTEMPTS + 1):
-        raw = call_ollama(prompt, model, fmt=schema)
         try:
+            raw = call_ollama(prompt, model, fmt=schema)
             return parse(raw), raw
+        except ModelLooped as e:
+            log(f"      {e} (attempt {attempt}/{MAX_JSON_ATTEMPTS})")
         except ValueError as e:
             log(f"      couldn't parse model output (attempt {attempt}/{MAX_JSON_ATTEMPTS}): {e}")
     return None, raw
@@ -799,6 +822,16 @@ def verify_question(q: dict, text_chunk: str, model: str, log=print) -> bool:
     return verify_questions([q], text_chunk, model, log)[0]
 
 
+def ask_skipping_failures(prompt: str, model: str, label: str, log=print) -> list[dict]:
+    """Questions for one part of a paper; if the model can't produce any, say
+    so and carry on with the rest rather than losing the whole paper."""
+    try:
+        return ask_for_questions(prompt, model, log)
+    except ValueError as e:
+        log(f"      skipped {label}: {e}")
+        return []
+
+
 def rank_candidates(candidates: list[dict], num_questions: int, model: str, log=print) -> list[dict]:
     try:
         ranked_ids = ask_json(build_rank_prompt(candidates, num_questions), model, RANK_SCHEMA, log)["ranked_ids"]
@@ -838,7 +871,8 @@ def generate_questions(text: str, model: str, num_questions: int, log=print,
     if not done and overview_source.strip():
         log("      reading the paper as a whole...")
         overview_wanted = max(2, round(target * LEVEL_WEIGHTS["overview"] * 1.5))
-        for q in ask_for_questions(build_overview_prompt(overview_source, overview_wanted, guidance), model, log):
+        for q in ask_skipping_failures(build_overview_prompt(overview_source, overview_wanted, guidance),
+                                       model, "the whole-paper pass", log):
             q["chunk"] = OVERVIEW_SOURCE
             candidates.append(q)
         if checkpoint:
@@ -851,7 +885,7 @@ def generate_questions(text: str, model: str, num_questions: int, log=print,
             log(f"      section {i + 1}/{len(chunks)}...")
         label = "the full text" if len(chunks) == 1 else f"section {i + 1} of {len(chunks)}"
         prompt = build_prompt(chunk, per_chunk, label, overlapping=i > 0, guidance=guidance)
-        for q in ask_for_questions(prompt, model, log):
+        for q in ask_skipping_failures(prompt, model, label, log):
             q["chunk"] = i
             candidates.append(q)
         if checkpoint:
